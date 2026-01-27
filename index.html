@@ -3,40 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber V4.0 (ESP32)</title>
+    <title>Ski-VTuber V8.4 FINAL - 3D Layered</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        #container { position: relative; width: 100vw; height: 100vh; background: #000; }
-        
-        /* 鏡頭畫面：強制拉伸填滿，即使訊號源是低畫質 */
-        #camera-video { width: 100%; height: 100%; object-fit: cover; z-index: 1; transform: scaleX(1); }
-        
-        /* V皮層 */
-        #avatar-container {
-            position: absolute; bottom: 0; right: 0; width: 45vw;
-            pointer-events: none; z-index: 10;
-            display: flex; justify-content: center; align-items: flex-end;
-        }
-        #sway-layer { width: 100%; height: auto; transform-origin: bottom center; animation: breathe 4s ease-in-out infinite; }
-        .part { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; opacity: 0; visibility: hidden; }
-        #base-body { opacity: 1; visibility: visible; position: relative; z-index: 11; }
-        #mouth-part { z-index: 12; } 
-        #eyes-part { z-index: 13; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+        #camera-video { width: 100%; height: 100%; object-fit: cover; z-index: 1; }
 
-        @keyframes breathe {
-            0%, 100% { transform: scale(1) skewX(0deg); }
-            50% { transform: scale(1.02) skewX(1deg); }
-        }
+        /* V皮整體容器 */
+        #avatar-container { position: absolute; bottom: -5px; right: -5px; width: 45vw; height: auto; pointer-events: none; z-index: 10; }
 
-        /* UI */
-        #ui-layer {
-            position: absolute; top: 10px; left: 10px; z-index: 100;
-            background: rgba(0, 0, 0, 0.85); padding: 12px; border-radius: 12px;
-            color: #00d2ff; display: flex; flex-direction: column; gap: 8px; width: 260px;
-            border: 1px solid #00d2ff;
-        }
-        button { padding: 10px; background: #00d2ff; border: none; border-radius: 6px; color: #000; font-weight: 800; cursor: pointer; }
-        select { padding: 8px; background: #222; color: white; border: 1px solid #555; width: 100%; }
+        /* 零件層級與動畫 */
+        .part { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; transition: transform 0.1s ease-out; }
+
+        /* 堆疊順序：從底層到頂層 */
+        #body { z-index: 11; animation: breathe 4s ease-in-out infinite; } /* 1. 外套前半部 */
+        #out_jacket { z-index: 12; animation: breathe 4s ease-in-out infinite; } /* 2. 外套後部 (擋住頭頸部後面) */
+        #head { z-index: 13; animation: head-sway 5s ease-in-out infinite; transform-origin: bottom center; } /* 3. 頭部底座 */
+        #ears { z-index: 14; animation: ear-twitch 2.5s ease-in-out infinite; transform-origin: center top; } /* 4. 耳朵 */
+        #hair { z-index: 15; animation: hair-flutter 3.5s ease-in-out infinite; transform-origin: center top; } /* 5. 瀏海 */
+        #mouth_close { z-index: 16; } /* 6. 閉嘴貼紙 */
+        #eyes_closed { z-index: 17; opacity: 0; visibility: hidden; } /* 7. 閉眼貼紙 */
+
+        /* 動畫效果碼 - 保持不變 */
+        @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+        @keyframes head-sway { 0%, 100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(0.8deg) translateY(-3px); } }
+        @keyframes ear-twitch { 0%, 80% { transform: rotate(0deg); } 85% { transform: rotate(2deg); } 95% { transform: rotate(-1deg); } }
+        @keyframes hair-flutter { 0%, 100% { transform: skewX(0.5deg) translateX(0); } 50% { transform: skewX(1.8deg) translateX(3px); } }
+
+        /* UI - 保持不變 */
+        #ui { position: absolute; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.85); color: #00d2ff; padding: 15px; border-radius: 12px; width: 260px; border: 1px solid #00d2ff; }
+        button { padding: 10px; background: #00d2ff; border: none; border-radius: 6px; font-weight: 800; cursor: pointer; width: 100%; margin: 5px 0; }
+        .adj-box { background: rgba(255,255,255,0.1); padding: 5px; border-radius: 5px; margin-top: 5px; font-size: 11px; color: white; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -46,152 +43,87 @@
     <video id="camera-video" autoplay playsinline muted></video>
     
     <div id="avatar-container">
-        <div id="sway-layer">
-            <img id="base-body" class="part" src="idle.png">
-            <img id="mouth-part" class="part" src="mouth_open.png">
-            <img id="eyes-part" class="part" src="eyes_closed.png">
-        </div>
+        <!-- 檔案名稱適應你的 Procreate 輸出 -->
+        <img id="body" class="part" src="body.png">
+        <img id="out_jacket" class="part" src="Out_jacket.png"> <!-- 新增的外套後部 -->
+        <img id="head" class="part" src="head.png">
+        <img id="ears" class="part" src="ears.png">
+        <img id="hair" class="part" src="hair.png">
+        <img id="mouth_close" class="part" src="mouth_close.png">
+        <img id="eyes_closed" class="part" src="eyes_closed.png">
     </div>
     
-    <div id="ui-layer">
-        <div style="text-align:center; font-weight:900;">ESP32 UVC 專用模式</div>
-        
-        <!-- 1. 鏡頭選擇 -->
-        <label style="font-size:12px;">選擇鏡頭 (找 ID 很長的那個):</label>
-        <select id="cam-select"></select>
-        
-        <!-- 2. 解析度強制設定 -->
-        <div style="font-size:12px; color:white;">
-            強制解析度: 
-            <select id="res-select" style="width: auto; display:inline-block;">
-                <option value="240">320x240 (最順)</option>
-                <option value="480">640x480 (一般)</option>
-            </select>
+    <div id="ui">
+        <b>SKI-VTUBER V8.4 FINAL</b><br>
+        <button id="start-btn">1. 啟動系統</button>
+        <div class="adj-box">
+            調整高度：<br>
+            嘴巴: <button onclick="adj('mouth_close',-2)" style="width:30px; padding:2px;">↑</button><button onclick="adj('mouth_close',2)" style="width:30px; padding:2px;">↓</button>
+            眼睛: <button onclick="adj('eyes_closed',-2)" style="width:30px; padding:2px;">↑</button><button onclick="adj('eyes_closed',2)" style="width:30px; padding:2px;">↓</button>
         </div>
-
-        <button id="start-btn">啟動系統</button>
-        
-        <!-- 微調控制 -->
-        <div style="display:flex; justify-content:space-between; font-size:12px; color:white;">
-            <div>嘴: <button onclick="adjust('mouth', -2)">↑</button><button onclick="adjust('mouth', 2)">↓</button></div>
-            <div>眼: <button onclick="adjust('eyes', -2)">↑</button><button onclick="adjust('eyes', 2)">↓</button></div>
-        </div>
-        <div style="font-size:11px; color:white;">麥克風靈敏度: <input type="range" id="sens-slider" value="45"></div>
-
-        <button id="hide-ui-btn" style="background:#cc3333; color:white;">隱藏介面</button>
+        <div style="font-size:10px; color:white; margin:5px 0;">麥克風靈敏度: <input type="range" id="sens" value="45" style="width:100px;"></div>
+        <button id="hide-btn" style="background:#cc3333; color:white;">2. 直播準備 (隱藏介面)</button>
     </div>
 </div>
 
 <script>
-    const mouth = document.getElementById('mouth-part');
-    const eyes = document.getElementById('eyes-part');
-    const video = document.getElementById('camera-video');
-    const camSelect = document.getElementById('cam-select');
-    const resSelect = document.getElementById('res-select');
-    
-    let offsets = { mouth: 0, eyes: 0 };
-    let isTalking = false, talkTimeout = null, currentStream = null;
+    const head = document.getElementById('head'); 
+    const mouth = document.getElementById('mouth_close'); 
+    const eyes = document.getElementById('eyes_closed');
+    let offsets = { mouth_close: 0, eyes_closed: 0 };
 
-    function adjust(part, val) {
-        offsets[part] += val;
-        (part === 'mouth' ? mouth : eyes).style.top = offsets[part] + 'px';
+    function adj(p, v) { 
+        offsets[p] += v; 
+        document.getElementById(p).style.top = offsets[p] + 'px'; 
     }
 
-    function setPart(el, show) {
-        el.style.opacity = show ? "1" : "0";
-        el.style.visibility = show ? "visible" : "hidden";
+    function setV(el, s) { 
+        el.style.opacity = s ? "1" : "0"; 
+        el.style.visibility = s ? "visible" : "hidden"; 
     }
 
-    // --- 取得鏡頭列表 ---
-    async function initCameras() {
-        try {
-            // 先請求權限，Chrome 才會吐出裝置標籤
-            await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(d => d.kind === 'videoinput');
-            
-            camSelect.innerHTML = '';
-            videoDevices.forEach((d, i) => {
-                const opt = document.createElement('option');
-                opt.value = d.deviceId;
-                // 嘗試標記出 USB 相機，通常 label 會包含 USB 或 External，但有時是空白
-                let label = d.label || `Camera ${i+1}`;
-                opt.text = label;
-                
-                // 自動選取邏輯：如果是最後一個，或者名字有 USB，就預設選它
-                if (i === videoDevices.length - 1) opt.selected = true;
-                
-                camSelect.appendChild(opt);
-            });
-        } catch (e) {
-            alert("請允許相機權限！");
-        }
-    }
-
-    // --- 啟動系統 (包含 ESP32 優化參數) ---
     document.getElementById('start-btn').onclick = async () => {
         try {
-            if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-            
-            // 關鍵：這裡指定了寬高，這會告訴 ESP32 "請給我小一點的畫面"
-            const height = parseInt(resSelect.value);
-            const width = height === 240 ? 320 : 640;
-            
-            currentStream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    deviceId: { exact: camSelect.value },
-                    width: { ideal: width },
-                    height: { ideal: height },
-                    frameRate: { ideal: 15 } // 限制 FPS 也能減少延遲
-                }
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' }, audio: true 
             });
-            video.srcObject = currentStream;
+            document.getElementById('camera-video').srcObject = stream;
 
-            // 啟動音訊
-            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const audioCtx = new AudioContext();
             const analyser = audioCtx.createAnalyser();
-            const source = audioCtx.createMediaStreamSource(audioStream);
-            const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+            const src = audioCtx.createMediaStreamSource(stream);
+            const proc = audioCtx.createScriptProcessor(2048, 1, 1);
+            src.connect(analyser); analyser.connect(proc); proc.connect(audioCtx.destination);
             
-            analyser.fftSize = 1024;
-            source.connect(analyser);
-            analyser.connect(processor);
-            processor.connect(audioCtx.destination);
-            
-            processor.onaudioprocess = () => {
+            proc.onaudioprocess = () => {
                 const data = new Uint8Array(analyser.frequencyBinCount);
                 analyser.getByteFrequencyData(data);
-                const vol = data.reduce((a, b) => a + b) / data.length;
-                if (vol > (105 - document.getElementById('sens-slider').value)) {
-                    isTalking = true;
-                    setPart(mouth, true);
-                    if (talkTimeout) clearTimeout(talkTimeout);
-                    talkTimeout = setTimeout(() => { isTalking = false; setPart(mouth, false); }, 200);
+                const vol = data.reduce((a,b)=>a+b)/data.length;
+                
+                // 嘴巴動作邏輯：利用臉部位移模擬說話
+                if (vol > (105 - document.getElementById('sens').value)) {
+                    head.style.transform = "scale(0.99) rotate(-0.5deg)"; 
+                    mouth.style.transform = `translateY(${offsets.mouth_close + 1}px)`; 
+                } else {
+                    head.style.transform = ""; 
+                    mouth.style.transform = `translateY(${offsets.mouth_close}px)`;
                 }
             };
-            startAutoBlink();
-        } catch (err) {
-            alert("相機啟動失敗：\n1. 請確認 OTG 有接好\n2. 嘗試選另一個鏡頭 ID\n3. 試試看 Firefox 瀏覽器");
-        }
+
+            // 自動眨眼
+            const blink = () => {
+                setV(eyes, true);
+                setTimeout(() => setV(eyes, false), 150);
+                setTimeout(blink, Math.random() * 4000 + 2000);
+            };
+            blink();
+
+            document.getElementById('start-btn').innerText = "系統運行中...";
+        } catch(e) { alert("啟動失敗，請確認已給予權限"); }
     };
 
-    function startAutoBlink() {
-        setTimeout(() => {
-            setPart(eyes, true);
-            setTimeout(() => { setPart(eyes, false); startAutoBlink(); }, 180);
-        }, Math.random() * 4000 + 2000);
-    }
-
-    initCameras();
-    document.getElementById('container').onclick = (e) => {
-        if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
-            document.getElementById('ui-layer').classList.toggle('hidden');
-        }
-    };
-    document.getElementById('hide-ui-btn').onclick = () => document.getElementById('ui-layer').classList.add('hidden');
+    document.getElementById('hide-btn').onclick = () => document.getElementById('ui').classList.add('hidden');
+    document.body.onclick = (e) => { if(e.target.tagName==='VIDEO') document.getElementById('ui').classList.toggle('hidden'); };
 </script>
-
 </body>
 </html>
