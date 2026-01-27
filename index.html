@@ -3,109 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber Pro V3</title>
+    <title>Ski-VTuber Solo Pro V3</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        #container { position: relative; width: 100vw; height: 100vh; background: #222; }
-        #camera-video { width: 100%; height: 100%; object-fit: cover; }
-        #avatar-layer {
-            position: absolute; bottom: -5px; right: -10px; width: 45vw; height: auto;
-            z-index: 10; pointer-events: none; filter: drop-shadow(2px 2px 8px rgba(0,0,0,0.7));
+        #container { position: relative; width: 100vw; height: 100vh; background: #111; }
+        
+        /* 攝影機底層 */
+        #camera-video { width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+        
+        /* V皮疊加層邏輯 */
+        .avatar-group {
+            position: absolute;
+            bottom: -5px;
+            right: -10px;
+            width: 45vw; /* V皮佔螢幕寬度比例 */
+            height: auto;
+            pointer-events: none;
+            z-index: 10;
         }
+
+        .part {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 100%;
+            height: auto;
+            transition: transform 0.05s linear;
+        }
+
+        #base-body { z-index: 11; } /* 底層：開眼閉嘴 */
+        #mouth-part { z-index: 12; display: none; } /* 零件：張嘴 */
+        #eyes-part { z-index: 13; display: none; }  /* 零件：閉眼 */
+
+        /* 控制面板 UI */
         #ui-layer {
-            position: absolute; top: 10px; left: 10px; z-index: 20;
+            position: absolute; top: 10px; left: 10px; z-index: 100;
             background: rgba(0, 0, 0, 0.8); padding: 15px; border-radius: 12px;
-            color: white; display: flex; flex-direction: column; gap: 12px; width: 280px;
+            color: white; display: flex; flex-direction: column; gap: 10px; width: 260px;
+            backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2);
         }
-        button { padding: 12px; font-size: 14px; cursor: pointer; background: #00d2ff; border: none; border-radius: 6px; color: #003344; font-weight: 800; }
-        select { padding: 8px; border-radius: 4px; background: #333; color: white; border: 1px solid #555; }
+
+        button { padding: 10px; background: #00d2ff; border: none; border-radius: 6px; color: #003344; font-weight: 800; cursor: pointer; }
+        .adjust-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; background: rgba(255,255,255,0.1); padding: 5px 8px; border-radius: 5px; }
+        .btn-sm { padding: 5px 12px; background: #555; color: white; border-radius: 4px; font-weight: bold; }
+        select { padding: 8px; border-radius: 4px; background: #333; color: white; border: 1px solid #666; width: 100%; }
         .hidden { display: none !important; }
-        .hint { font-size: 11px; color: #aaa; }
+        .hint { font-size: 11px; color: #00d2ff; }
     </style>
 </head>
 <body>
+
 <div id="container">
     <video id="camera-video" autoplay playsinline muted></video>
-    <img id="avatar-layer" src="idle.png">
     
+    <!-- V皮結構 -->
+    <div class="avatar-group">
+        <img id="base-body" class="part" src="idle.png">
+        <img id="mouth-part" class="part" src="mouth_open.png">
+        <img id="eyes-part" class="part" src="eyes_closed.png">
+    </div>
+    
+    <!-- 控制介面 -->
     <div id="ui-layer">
-        <div style="font-weight:bold; color:#00d2ff;">1. 相機設定 (選USB鏡頭)</div>
-        <select id="cam-select"><option>等待權限...</option></select>
-        <button id="refresh-cam">重新整理相機列表</button>
-
-        <div style="font-weight:bold; color:#00d2ff; margin-top:5px;">2. 麥克風與口型</div>
-        <button id="start-mic">啟動麥克風偵測</button>
-        <div class="hint">靈敏度 (避開風聲):</div>
-        <input type="range" id="sens-slider" min="0" max="100" value="45">
+        <div style="text-align:center; font-weight:900; color:#00d2ff;">SKI-VTUBER PRO V3</div>
         
-        <button id="hide-ui-btn" style="background:#444; color:white; margin-top:10px;">隱藏介面 (點擊畫面喚回)</button>
+        <label class="hint">1. 選擇相機 (選USB鏡頭)</label>
+        <select id="cam-select"><option>偵測相機中...</option></select>
+
+        <button id="start-btn">2. 啟動系統 (開始偵測)</button>
+        
+        <label class="hint">3. 零件位置對準 (手動微調)</label>
+        <div class="adjust-row">
+            嘴巴上下: 
+            <div>
+                <button class="btn-sm" onclick="adjust('mouth', -1)">↑</button>
+                <button class="btn-sm" onclick="adjust('mouth', 1)">↓</button>
+            </div>
+        </div>
+        <div class="adjust-row">
+            眼睛上下: 
+            <div>
+                <button class="btn-sm" onclick="adjust('eyes', -1)">↑</button>
+                <button class="btn-sm" onclick="adjust('eyes', 1)">↓</button>
+            </div>
+        </div>
+
+        <div style="font-size:12px;">麥克風靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="45"></div>
+        
+        <button id="hide-ui-btn" style="background:#cc3333; color:white; font-size:12px;">隱藏介面 (點擊螢幕顯示)</button>
     </div>
 </div>
 
 <script>
-    const imgs = { idle: 'idle.png', talk: 'talk.png', blink: 'blink.png' };
-    const avatar = document.getElementById('avatar-layer');
+    const mouth = document.getElementById('mouth-part');
+    const eyes = document.getElementById('eyes-part');
     const video = document.getElementById('camera-video');
     const camSelect = document.getElementById('cam-select');
     const sensSlider = document.getElementById('sens-slider');
     
-    let isBlinking = false, isTalking = false, currentStream = null;
-    let talkTimeout = null; // 用來維持嘴巴張開的時間
+    let isTalking = false, isBlinking = false, talkTimeout = null;
+    let currentStream = null;
 
-    // --- 相機清單功能 ---
-    async function updateCamList() {
+    // --- 零件對位邏輯 ---
+    // 儲存偏移量，方便你對準臉部
+    let offsets = { mouth: 0, eyes: 0 };
+    function adjust(part, val) {
+        offsets[part] += val;
+        const target = (part === 'mouth') ? mouth : eyes;
+        target.style.transform = `translateY(${offsets[part]}px)`;
+        console.log(`${part} offset: ${offsets[part]}px`);
+    }
+
+    // --- 相機初始化 ---
+    async function initCameras() {
         try {
-            // 先請求一次權限，否則拿不到設備名稱
-            await navigator.mediaDevices.getUserMedia({ video: true });
+            await navigator.mediaDevices.getUserMedia({ video: true }); // 先要權限
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
-            
             camSelect.innerHTML = '';
-            videoDevices.forEach((device, index) => {
-                const option = document.createElement('option');
-                option.value = device.deviceId;
-                option.text = device.label || `相機 ${index + 1}`;
-                camSelect.appendChild(option);
+            videoDevices.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.text = d.label || `Camera ${camSelect.length + 1}`;
+                camSelect.appendChild(opt);
             });
-        } catch (e) {
-            alert("請允許相機權限以選取設備");
-        }
+        } catch (e) { alert("相機啟動失敗，請確認網址為 HTTPS 且已給予權限"); }
     }
 
-    async function switchCamera(deviceId) {
+    // --- 系統啟動按鈕 ---
+    document.getElementById('start-btn').onclick = async () => {
+        // 啟動選定的相機
         if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-        const constraints = { video: { deviceId: { exact: deviceId } } };
-        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = currentStream;
-    }
+        const videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: camSelect.value } }
+        });
+        video.srcObject = videoStream;
+        currentStream = videoStream;
 
-    camSelect.onchange = () => switchCamera(camSelect.value);
-    document.getElementById('refresh-cam').onclick = updateCamList;
-
-    // --- 聲音偵測優化 ---
-    document.getElementById('start-mic').onclick = async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioContext = new AudioContext();
-        const analyser = audioContext.createAnalyser();
-        const microphone = audioContext.createMediaStreamSource(stream);
-        const node = audioContext.createScriptProcessor(2048, 1, 1);
+        // 啟動麥克風偵測
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new AudioContext();
+        const analyser = audioCtx.createAnalyser();
+        const source = audioCtx.createMediaStreamSource(audioStream);
+        const processor = audioCtx.createScriptProcessor(2048, 1, 1);
         
         analyser.fftSize = 1024;
-        microphone.connect(analyser);
-        analyser.connect(node);
-        node.connect(audioContext.destination);
-
-        node.onaudioprocess = () => {
-            const array = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(array);
-            let sum = array.reduce((a, b) => a + b, 0);
-            let volume = sum / array.length;
+        source.connect(analyser);
+        analyser.connect(processor);
+        processor.connect(audioCtx.destination);
+        
+        processor.onaudioprocess = () => {
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(data);
+            const volume = data.reduce((a, b) => a + b) / data.length;
             
-            // 靈敏度判斷
-            if (volume > (105 - sensSlider.value)) {
+            const threshold = 105 - parseInt(sensSlider.value);
+            
+            if (volume > threshold) {
                 isTalking = true;
-                // 一旦偵測到說話，清除計時器，保持張嘴
+                mouth.style.display = 'block';
                 if (talkTimeout) clearTimeout(talkTimeout);
+                // 嘴巴張開後至少維持 200ms，讓動作不閃爍
+                talkTimeout = setTimeout(() => {
+                    isTalking = false;
+                    if(!isBlinking) mouth.style.display = 'none';
+                }, 200);
+            }
+        };
+
+        blinkLoop();
+        document.getElementById('start-btn').innerText = "系統運作中";
+        document.getElementById('start-btn').style.background = "#55ff55";
+    };
+
+    // --- 自動眨眼循環 ---
+    function blinkLoop() {
+        const nextBlink = Math.random() * 4000 + 2000;
+        setTimeout(() => {
+            isBlinking = true;
+            eyes.style.display = 'block';
+            setTimeout(() => {
+                isBlinking = false;
+                eyes.style.display = 'none';
+                blinkLoop();
+            }, 180); // 眨眼時間
+        }, nextBlink);
+    }
+
+    // UI 控制
+    initCameras();
+    document.getElementById('container').onclick = (e) => {
+        if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+            document.getElementById('ui-layer').classList.toggle('hidden');
+        }
+    };
+    document.getElementById('hide-ui-btn').onclick = () => document.getElementById('ui-layer').classList.add('hidden');
+</script>
+
+</body>
+</html>                if (talkTimeout) clearTimeout(talkTimeout);
                 talkTimeout = setTimeout(() => {
                     isTalking = false;
                     updateAvatar();
