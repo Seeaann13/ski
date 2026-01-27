@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber V4.2 Total Access</title>
+    <title>Ski-VTuber V4.4 ALL PERMISSIONS</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
         
         #camera-video { width: 100%; height: 100%; object-fit: contain; }
         
-        /* V皮層 (保留飄動效果) */
+        /* V皮層 */
         #avatar-container {
             position: absolute; bottom: 0; right: 0; width: 45vw;
             pointer-events: none; z-index: 10;
@@ -30,28 +30,24 @@
         #mouth-part { z-index: 12; } 
         #eyes-part { z-index: 13; }
 
-        /* UI */
-        #ui-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); color: #fff;
+        /* 全螢幕啟動蓋板 (觸發權限用) */
+        #overlay-trigger {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 999;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 100; padding: 20px; box-sizing: border-box;
+            color: #00d2ff; text-align: center; cursor: pointer;
         }
-        
-        /* 隱藏 UI 時的狀態 */
-        #ui-layer.minimized {
-            height: auto; bottom: 0; top: auto; background: rgba(0,0,0,0.5);
-            display: block; padding: 10px;
-        }
-        #ui-layer.minimized .full-controls { display: none; }
-        #ui-layer.minimized #restore-btn { display: block; }
+        .pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 
-        button { padding: 15px 30px; background: #00d2ff; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin: 10px 0; width: 100%; max-width: 300px; }
-        button.red { background: #ff4444; color: white; }
-        select { padding: 10px; background: #333; color: white; border: 1px solid #666; width: 100%; max-width: 300px; margin-bottom: 10px;}
-        
-        #status-log { color: #aaa; font-size: 12px; margin-top: 10px; text-align: center; }
-        #restore-btn { display: none; width: 100%; background: transparent; color: #00d2ff; border: 1px solid #00d2ff; }
+        /* 簡單的設定小按鈕 (隱藏在左上) */
+        #settings-ui {
+            position: absolute; top: 10px; left: 10px; z-index: 100;
+            background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px;
+            display: none; /* 啟動後才顯示 */
+        }
+        select { background: #000; color: #fff; border: 1px solid #555; max-width: 150px;}
+        input[type=range] { width: 100px; vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -67,45 +63,165 @@
         </div>
     </div>
 
-    <div id="ui-layer">
-        <div class="full-controls" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-            <h2 style="color:#00d2ff;">權限暴力請求版 V4.2</h2>
-            
-            <!-- 步驟 1 -->
-            <button onclick="askAllPermissions()">1. 按我！一次請求所有權限</button>
-            <div id="status-log">等待操作...</div>
+    <!-- 這是「陷阱」：全螢幕按鈕 -->
+    <div id="overlay-trigger" onclick="bombardPermissions()">
+        <div style="font-size: 60px; margin-bottom: 20px;">👆</div>
+        <h1 class="pulse">點擊螢幕任意處<br>啟動全權限請求</h1>
+        <p style="color:#aaa; font-size: 12px; margin-top:20px;">
+            將同時請求：相機、麥克風、USB、序列埠、感應器、螢幕恆亮
+        </p>
+    </div>
 
-            <hr style="width:100%; border-color:#333; margin: 20px 0;">
-
-            <!-- 步驟 2 -->
-            <label>2. 選擇鏡頭 (USB通常在最後):</label>
-            <select id="cam-select"><option>請先完成步驟 1</option></select>
-            
-            <!-- 步驟 3 -->
-            <button id="start-btn" onclick="startSystem()" disabled style="background:#555;">3. 啟動系統 (320x240)</button>
-
-            <div style="width:100%; max-width:300px; margin-top:10px;">
-                口型靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="50" style="width:100%;">
-            </div>
-            
-            <button class="red" onclick="minimizeUI()">開始直播 (隱藏介面)</button>
-        </div>
-
-        <button id="restore-btn" onclick="restoreUI()">顯示設定面板</button>
+    <!-- 啟動後的小控制列 -->
+    <div id="settings-ui">
+        <select id="cam-select" onchange="startSystem()"></select>
+        <span style="color:white; font-size:12px;">靈敏:</span>
+        <input type="range" id="sens-slider" min="0" max="100" value="50">
     </div>
 </div>
 
 <script>
     const video = document.getElementById('camera-video');
     const camSelect = document.getElementById('cam-select');
-    const statusLog = document.getElementById('status-log');
-    const startBtn = document.getElementById('start-btn');
-    const uiLayer = document.getElementById('ui-layer');
+    const overlay = document.getElementById('overlay-trigger');
+    const settingsUi = document.getElementById('settings-ui');
     
     const mouth = document.getElementById('mouth-part');
     const eyes = document.getElementById('eyes-part');
     let currentStream = null, talkTimeout = null;
 
+    // --- 權限大轟炸函數 ---
+    async function bombardPermissions() {
+        overlay.innerHTML = "<h2 style='color:white'>正在請求所有權限...<br>請全部按「允許」</h2>";
+        
+        const promises = [];
+
+        // 1. 請求相機 & 麥克風 (最重要)
+        promises.push(navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                stream.getTracks().forEach(t => t.stop()); // 只要權限，不要流
+                console.log("Cam/Mic OK");
+            }).catch(e => console.error("Cam Fail", e)));
+
+        // 2. 請求 USB 裝置 (這會跳出選單)
+        if (navigator.usb) {
+            promises.push(navigator.usb.requestDevice({ filters: [] }) // 空陣列代表列出所有
+                .then(dev => console.log("USB OK", dev))
+                .catch(e => console.log("USB Cancelled/Fail", e)));
+        }
+
+        // 3. 請求 序列埠 (Serial) - 有些 ESP32 走這個
+        if (navigator.serial) {
+            promises.push(navigator.serial.requestPort()
+                .then(port => console.log("Serial OK"))
+                .catch(e => console.log("Serial Cancelled", e)));
+        }
+
+        // 4. 請求 螢幕恆亮 (Wake Lock) - 滑雪很重要，不然手機會黑屏
+        if (navigator.wakeLock) {
+            promises.push(navigator.wakeLock.request('screen')
+                .then(() => console.log("Screen Lock OK"))
+                .catch(e => console.log("Screen Lock Fail", e)));
+        }
+
+        // 5. 請求 動作感應器 (如果支援)
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            promises.push(DeviceMotionEvent.requestPermission()
+                .then(state => console.log("Motion OK", state))
+                .catch(e => console.error("Motion Fail", e)));
+        }
+
+        // 等待所有視窗都跳出來
+        await Promise.allSettled(promises);
+
+        // 全部問完後，進入系統
+        overlay.style.display = 'none';
+        settingsUi.style.display = 'block';
+        await listDevices();
+        await startSystem();
+    }
+
+    // --- 列出鏡頭 ---
+    async function listDevices() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        camSelect.innerHTML = '';
+        videoDevices.forEach((d, i) => {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.text = d.label || `鏡頭 ${i+1}`;
+            // 優先選最後一個(通常是外接)，或名字含 USB
+            if (i === videoDevices.length - 1 || d.label.toLowerCase().includes('usb')) {
+                opt.selected = true;
+            }
+            camSelect.appendChild(opt);
+        });
+    }
+
+    // --- 啟動系統 (ESP32 低解析度) ---
+    async function startSystem() {
+        if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+
+        const constraints = {
+            video: {
+                deviceId: { exact: camSelect.value },
+                width: { ideal: 320 }, // 鎖定低解析
+                height: { ideal: 240 },
+                frameRate: { ideal: 15 }
+            },
+            audio: false
+        };
+
+        try {
+            const vidStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = vidStream;
+            currentStream = vidStream;
+            startAudio();
+            startAutoBlink();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // --- 輔助功能 ---
+    async function startAudio() {
+        try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const analyser = ctx.createAnalyser();
+            const src = ctx.createMediaStreamSource(audioStream);
+            const script = ctx.createScriptProcessor(2048, 1, 1);
+            analyser.fftSize = 512;
+            src.connect(analyser);
+            analyser.connect(script);
+            script.connect(ctx.destination);
+            script.onaudioprocess = () => {
+                const data = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(data);
+                const vol = data.reduce((a,b)=>a+b)/data.length;
+                if(vol > (105 - document.getElementById('sens-slider').value)) {
+                    setPart(mouth, true);
+                    if(talkTimeout) clearTimeout(talkTimeout);
+                    talkTimeout = setTimeout(()=>setPart(mouth, false), 200);
+                }
+            };
+        } catch(e){}
+    }
+
+    function setPart(el, show) {
+        el.style.opacity = show ? 1 : 0;
+        el.style.visibility = show ? 'visible' : 'hidden';
+    }
+
+    function startAutoBlink() {
+        setTimeout(()=>{
+            setPart(eyes, true);
+            setTimeout(()=>{ setPart(eyes, false); startAutoBlink(); }, 180);
+        }, Math.random()*4000+2000);
+    }
+</script>
+</body>
+</html>
     // --- 1. 暴力請求所有權限 ---
     async function askAllPermissions() {
         statusLog.innerText = "正在請求 相機+麥克風 權限...";
