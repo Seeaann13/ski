@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ski-VTuber Solo</title>
+    <style>
+        /* 基礎設定：黑色背景，隱藏捲軸 */
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        
+        /* 容器占滿螢幕 */
+        #container { position: relative; width: 100vw; height: 100vh; }
+        
+        /* 1. 攝影機畫面 (POV) */
+        #camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* 確保畫面填滿不變形 */
+            transform: scaleX(1); /* 如果畫面左右相反，請改成 scaleX(-1) */
+        }
+
+        /* 2. V皮層 (Avatar) */
+        #avatar-layer {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 40vw; /* 預設大小：螢幕寬度的 40% */
+            height: auto;
+            z-index: 10; /* 在影片之上 */
+            pointer-events: none; /* 讓手指點擊可以穿透圖片 */
+            filter: drop-shadow(2px 2px 5px rgba(0,0,0,0.5)); /* 加點陰影更立體 */
+        }
+
+        /* 3. 控制面板 (UI) - 預設顯示 */
+        #ui-layer {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 20;
+            background: rgba(0, 0, 0, 0.6); /* 半透明黑底 */
+            padding: 15px;
+            border-radius: 12px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.2);
+            max-width: 300px;
+        }
+
+        /* 按鈕與滑桿樣式 */
+        button { 
+            padding: 12px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            background: #00d2ff; 
+            border: none; 
+            border-radius: 6px; 
+            color: #003344; 
+            font-weight: 800; 
+        }
+        
+        label { font-size: 14px; font-weight: bold; margin-bottom: 5px; display: block;}
+        input[type=range] { width: 100%; }
+        
+        /* 隱藏 UI 的類別 */
+        .hidden { display: none !important; }
+        
+        /* 狀態文字 */
+        .status { font-size: 12px; color: #00d2ff; margin-top: -5px; }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <!-- 這裡顯示相機畫面 -->
+    <video id="camera-video" autoplay playsinline muted></video>
+    
+    <!-- 這裡顯示 V皮 (預設載入待機圖) -->
+    <img id="avatar-layer" src="idle.png" alt="Avatar">
+    
+    <!-- 控制面板 -->
+    <div id="ui-layer">
+        <div style="text-align:center; font-weight:900; color:#00d2ff; margin-bottom:5px;">SKI-VTUBER V2</div>
+        
+        <!-- 靈敏度控制 (抗風切) -->
+        <div>
+            <label>麥克風靈敏度 (抗風切)</label>
+            <input type="range" id="sens-slider" min="0" max="100" value="40">
+            <div class="status">左: 抗風模式(需大聲) / 右: 室內模式(超靈敏)</div>
+        </div>
+
+        <!-- 大小控制 -->
+        <div>
+            <label>V皮大小</label>
+            <input type="range" id="size-slider" min="20" max="80" value="40">
+        </div>
+
+        <!-- 啟動按鈕 -->
+        <button id="start-btn">啟動相機 & 麥克風</button>
+        <button id="hide-ui-btn" style="background:#444; color:#fff; font-size:12px;">隱藏介面 (點擊畫面顯示)</button>
+    </div>
+</div>
+
+<script>
+    // --- 圖片設定 ---
+    // 這裡對應你改好名字的檔案
+    const imgs = {
+        idle:  'idle.png',  // 待機：眼睛開/嘴巴閉 (input_file_5)
+        talk:  'talk.png',  // 說話：眼睛開/嘴巴開 (input_file_4)
+        blink: 'blink.png'  // 眨眼：眼睛閉/嘴巴閉 (input_file_6)
+    };
+
+    // 取得 HTML 元素
+    const avatar = document.getElementById('avatar-layer');
+    const video = document.getElementById('camera-video');
+    const startBtn = document.getElementById('start-btn');
+    const sensSlider = document.getElementById('sens-slider');
+    const sizeSlider = document.getElementById('size-slider');
+    const uiLayer = document.getElementById('ui-layer');
+    const hideUiBtn = document.getElementById('hide-ui-btn');
+
+    // 音訊處理變數
+    let audioContext;
+    let analyser;
+    let microphone;
+    let javascriptNode;
+
+    // 狀態變數
+    let isBlinking = false; // 是否正在眨眼
+    let isTalking = false;  // 是否正在說話
+
+    // --- 1. 啟動邏輯 ---
+    startBtn.addEventListener('click', async () => {
+        try {
+            // 請求相機權限
+            // facingMode: 'environment' 代表優先使用後鏡頭/外接鏡頭
+            const constraints = { 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 1920 }, 
+                    height: { ideal: 1080 } 
+                },
+                audio: true // 需要麥克風
+            };
+            
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream; // 把畫面丟給 video 標籤
+
+            // 設定聲音分析 (AudioContext)
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            microphone = audioContext.createMediaStreamSource(stream);
+            javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+
+            analyser.smoothingTimeConstant = 0.5; // 讓嘴巴開合平滑一點
+            analyser.fftSize = 1024;
+
+            microphone.connect(analyser);
+            analyser.connect(javascriptNode);
+            javascriptNode.connect(audioContext.destination);
+
+            // 每當偵測到聲音時執行
+            javascriptNode.onaudioprocess = function() {
+                const array = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(array);
+                
+                // 計算平均音量
+                let values = 0;
+                const length = array.length;
+                for (let i = 0; i < length; i++) {
+                    values += array[i];
+                }
+                const average = values / length;
+
+                // --- 核心邏輯：抗風切 ---
+                // 滑桿數值越大(右)，Threshold 越小(容易觸發)
+                // 滑桿數值越小(左)，Threshold 越大(很難觸發，適合滑雪)
+                const threshold = 105 - parseInt(sensSlider.value); 
+                
+                // 判斷是否說話
+                const nowTalking = average > threshold;
+
+                if (nowTalking !== isTalking) {
+                    isTalking = nowTalking;
+                    updateAvatar(); // 更新圖片
+                }
+            }
+
+            // 更新按鈕狀態
+            startBtn.innerText = "運作中...";
+            startBtn.style.background = "#55ff55";
+            startBtn.disabled = true;
+            
+            // 啟動自動眨眼循環
+            blinkLoop();
+
+        } catch (err) {
+            console.error(err);
+            alert("錯誤：無法存取相機或麥克風。\n請確認瀏覽器權限已開啟。\n" + err.message);
+        }
+    });
+
+    // --- 2. UI 顯示控制 ---
+    hideUiBtn.addEventListener('click', () => {
+        uiLayer.classList.add('hidden'); // 隱藏面板
+    });
+
+    document.getElementById('container').addEventListener('click', (e) => {
+        // 如果點擊的地方不是按鈕或拉桿，就切換面板顯示/隱藏
+        if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
+            uiLayer.classList.toggle('hidden');
+        }
+    });
+
+    // --- 3. 大小調整 ---
+    sizeSlider.addEventListener('input', (e) => {
+        avatar.style.width = e.target.value + 'vw';
+    });
+
+    // --- 4. 圖片切換邏輯 (核心) ---
+    function updateAvatar() {
+        // 優先級：
+        // 1. 如果正在眨眼 -> 顯示閉眼圖 (不管有沒有說話)
+        // 2. 如果沒眨眼且在說話 -> 顯示張嘴圖
+        // 3. 其他 -> 顯示待機圖
+        
+        if (isBlinking) {
+            avatar.src = imgs.blink;
+        } else {
+            if (isTalking) {
+                avatar.src = imgs.talk;
+            } else {
+                avatar.src = imgs.idle;
+            }
+        }
+    }
+
+    // --- 5. 自動眨眼迴圈 ---
+    function blinkLoop() {
+        // 隨機產生下一次眨眼的時間 (2秒 ~ 6秒之間)
+        const interval = Math.random() * 4000 + 2000;
+        
+        setTimeout(() => {
+            isBlinking = true;
+            updateAvatar();
+            
+            // 閉眼維持 0.15 秒後張開
+            setTimeout(() => {
+                isBlinking = false;
+                updateAvatar();
+                blinkLoop(); // 再次呼叫自己，形成無限迴圈
+            }, 150);
+            
+        }, interval);
+    }
+</script>
+
+</body>
+</html>
