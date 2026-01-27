@@ -3,39 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber Solo Pro V3</title>
+    <title>Ski-VTuber Solo Pro V3.1</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
-        
-        /* 攝影機底層 */
         #camera-video { width: 100%; height: 100%; object-fit: cover; z-index: 1; }
         
-        /* V皮疊加層邏輯 */
         .avatar-group {
-            position: absolute;
-            bottom: -5px;
-            right: -10px;
-            width: 45vw; /* V皮佔螢幕寬度比例 */
-            height: auto;
-            pointer-events: none;
-            z-index: 10;
+            position: absolute; bottom: -5px; right: -10px;
+            width: 45vw; height: auto; pointer-events: none; z-index: 10;
         }
 
         .part {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 100%;
-            height: auto;
+            position: absolute; bottom: 0; right: 0;
+            width: 100%; height: auto;
+            opacity: 0; /* 預設全透明 */
             transition: transform 0.05s linear;
         }
 
-        #base-body { z-index: 11; } /* 底層：開眼閉嘴 */
-        #mouth-part { z-index: 12; display: none; } /* 零件：張嘴 */
-        #eyes-part { z-index: 13; display: none; }  /* 零件：閉眼 */
+        #base-body { z-index: 11; opacity: 1; } /* 底層永遠顯示 */
+        #mouth-part { z-index: 12; } 
+        #eyes-part { z-index: 13; }
 
-        /* 控制面板 UI */
         #ui-layer {
             position: absolute; top: 10px; left: 10px; z-index: 100;
             background: rgba(0, 0, 0, 0.8); padding: 15px; border-radius: 12px;
@@ -47,7 +36,6 @@
         .adjust-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; background: rgba(255,255,255,0.1); padding: 5px 8px; border-radius: 5px; }
         .btn-sm { padding: 5px 12px; background: #555; color: white; border-radius: 4px; font-weight: bold; }
         select { padding: 8px; border-radius: 4px; background: #333; color: white; border: 1px solid #666; width: 100%; }
-        .hidden { display: none !important; }
         .hint { font-size: 11px; color: #00d2ff; }
     </style>
 </head>
@@ -56,41 +44,36 @@
 <div id="container">
     <video id="camera-video" autoplay playsinline muted></video>
     
-    <!-- V皮結構 -->
     <div class="avatar-group">
         <img id="base-body" class="part" src="idle.png">
         <img id="mouth-part" class="part" src="mouth_open.png">
         <img id="eyes-part" class="part" src="eyes_closed.png">
     </div>
     
-    <!-- 控制介面 -->
     <div id="ui-layer">
-        <div style="text-align:center; font-weight:900; color:#00d2ff;">SKI-VTUBER PRO V3</div>
+        <div style="text-align:center; font-weight:900; color:#00d2ff;">SKI-VTUBER PRO V3.1</div>
         
-        <label class="hint">1. 選擇相機 (選USB鏡頭)</label>
         <select id="cam-select"><option>偵測相機中...</option></select>
-
-        <button id="start-btn">2. 啟動系統 (開始偵測)</button>
+        <button id="start-btn">啟動系統</button>
         
-        <label class="hint">3. 零件位置對準 (手動微調)</label>
+        <label class="hint">零件對位調整：</label>
         <div class="adjust-row">
-            嘴巴上下: 
-            <div>
+            嘴巴: <div>
                 <button class="btn-sm" onclick="adjust('mouth', -1)">↑</button>
                 <button class="btn-sm" onclick="adjust('mouth', 1)">↓</button>
             </div>
         </div>
         <div class="adjust-row">
-            眼睛上下: 
-            <div>
+            眼睛: <div>
                 <button class="btn-sm" onclick="adjust('eyes', -1)">↑</button>
                 <button class="btn-sm" onclick="adjust('eyes', 1)">↓</button>
             </div>
         </div>
 
+        <button id="test-blink" style="background:#ffaa00;">手動測試眨眼 (按住不放)</button>
+
         <div style="font-size:12px;">麥克風靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="45"></div>
-        
-        <button id="hide-ui-btn" style="background:#cc3333; color:white; font-size:12px;">隱藏介面 (點擊螢幕顯示)</button>
+        <button id="hide-ui-btn" style="background:#cc3333; color:white;">隱藏介面</button>
     </div>
 </div>
 
@@ -101,23 +84,31 @@
     const camSelect = document.getElementById('cam-select');
     const sensSlider = document.getElementById('sens-slider');
     
-    let isTalking = false, isBlinking = false, talkTimeout = null;
-    let currentStream = null;
-
-    // --- 零件對位邏輯 ---
-    // 儲存偏移量，方便你對準臉部
+    let isTalking = false, talkTimeout = null, currentStream = null;
     let offsets = { mouth: 0, eyes: 0 };
+
+    // --- 預載圖片防止眨眼閃爍 ---
+    function preloadImages() {
+        ['idle.png', 'mouth_open.png', 'eyes_closed.png'].forEach(src => {
+            const img = new Image();
+            img.src = src;
+        });
+    }
+
     function adjust(part, val) {
         offsets[part] += val;
         const target = (part === 'mouth') ? mouth : eyes;
         target.style.transform = `translateY(${offsets[part]}px)`;
-        console.log(`${part} offset: ${offsets[part]}px`);
     }
 
-    // --- 相機初始化 ---
+    // --- 測試眨眼按鈕 ---
+    const testBlinkBtn = document.getElementById('test-blink');
+    testBlinkBtn.onmousedown = testBlinkBtn.ontouchstart = () => eyes.style.opacity = 1;
+    testBlinkBtn.onmouseup = testBlinkBtn.ontouchend = () => eyes.style.opacity = 0;
+
     async function initCameras() {
         try {
-            await navigator.mediaDevices.getUserMedia({ video: true }); // 先要權限
+            await navigator.mediaDevices.getUserMedia({ video: true });
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
             camSelect.innerHTML = '';
@@ -127,12 +118,10 @@
                 opt.text = d.label || `Camera ${camSelect.length + 1}`;
                 camSelect.appendChild(opt);
             });
-        } catch (e) { alert("相機啟動失敗，請確認網址為 HTTPS 且已給予權限"); }
+        } catch (e) { console.log("Cam init error"); }
     }
 
-    // --- 系統啟動按鈕 ---
     document.getElementById('start-btn').onclick = async () => {
-        // 啟動選定的相機
         if (currentStream) currentStream.getTracks().forEach(t => t.stop());
         const videoStream = await navigator.mediaDevices.getUserMedia({
             video: { deviceId: { exact: camSelect.value } }
@@ -140,9 +129,62 @@
         video.srcObject = videoStream;
         currentStream = videoStream;
 
-        // 啟動麥克風偵測
         const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioCtx = new AudioContext();
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        const source = audioCtx.createMediaStreamSource(audioStream);
+        const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+        
+        analyser.fftSize = 1024;
+        source.connect(analyser);
+        analyser.connect(processor);
+        processor.connect(audioCtx.destination);
+        
+        processor.onaudioprocess = () => {
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(data);
+            const volume = data.reduce((a, b) => a + b) / data.length;
+            const threshold = 105 - parseInt(sensSlider.value);
+            
+            if (volume > threshold) {
+                isTalking = true;
+                mouth.style.opacity = 1;
+                if (talkTimeout) clearTimeout(talkTimeout);
+                talkTimeout = setTimeout(() => {
+                    isTalking = false;
+                    mouth.style.opacity = 0;
+                }, 200);
+            }
+        };
+
+        blinkLoop();
+        document.getElementById('start-btn').innerText = "系統運作中";
+        document.getElementById('start-btn').style.background = "#55ff55";
+    };
+
+    function blinkLoop() {
+        const nextBlink = Math.random() * 4000 + 2000;
+        setTimeout(() => {
+            eyes.style.opacity = 1;
+            setTimeout(() => {
+                eyes.style.opacity = 0;
+                blinkLoop();
+            }, 180); 
+        }, nextBlink);
+    }
+
+    preloadImages();
+    initCameras();
+    document.getElementById('container').onclick = (e) => {
+        if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+            document.getElementById('ui-layer').classList.toggle('hidden');
+        }
+    };
+    document.getElementById('hide-ui-btn').onclick = () => document.getElementById('ui-layer').classList.add('hidden');
+</script>
+
+</body>
+</html>        const audioCtx = new AudioContext();
         const analyser = audioCtx.createAnalyser();
         const source = audioCtx.createMediaStreamSource(audioStream);
         const processor = audioCtx.createScriptProcessor(2048, 1, 1);
