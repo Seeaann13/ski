@@ -3,23 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber Solo Pro</title>
+    <title>Ski-VTuber Pro V3</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        #container { position: relative; width: 100vw; height: 100vh; }
+        #container { position: relative; width: 100vw; height: 100vh; background: #222; }
         #camera-video { width: 100%; height: 100%; object-fit: cover; }
         #avatar-layer {
-            position: absolute; bottom: 0; right: 0; width: 45vw; height: auto;
-            z-index: 10; pointer-events: none; filter: drop-shadow(2px 2px 5px rgba(0,0,0,0.5));
+            position: absolute; bottom: -5px; right: -10px; width: 45vw; height: auto;
+            z-index: 10; pointer-events: none; filter: drop-shadow(2px 2px 8px rgba(0,0,0,0.7));
         }
         #ui-layer {
             position: absolute; top: 10px; left: 10px; z-index: 20;
-            background: rgba(0, 0, 0, 0.8); padding: 12px; border-radius: 12px;
-            color: white; display: flex; flex-direction: column; gap: 8px; font-size: 13px;
+            background: rgba(0, 0, 0, 0.8); padding: 15px; border-radius: 12px;
+            color: white; display: flex; flex-direction: column; gap: 12px; width: 280px;
         }
-        button { padding: 8px; cursor: pointer; background: #00d2ff; border: none; border-radius: 4px; font-weight: bold; }
-        select { padding: 5px; background: #333; color: white; border-radius: 4px; }
+        button { padding: 12px; font-size: 14px; cursor: pointer; background: #00d2ff; border: none; border-radius: 6px; color: #003344; font-weight: 800; }
+        select { padding: 8px; border-radius: 4px; background: #333; color: white; border: 1px solid #555; }
         .hidden { display: none !important; }
+        .hint { font-size: 11px; color: #aaa; }
     </style>
 </head>
 <body>
@@ -28,15 +29,16 @@
     <img id="avatar-layer" src="idle.png">
     
     <div id="ui-layer">
-        <b style="color:#00d2ff">SKI-TUBER 實戰版</b>
-        <button id="start-mic">1. 啟動麥克風</button>
+        <div style="font-weight:bold; color:#00d2ff;">1. 相機設定 (選USB鏡頭)</div>
+        <select id="cam-select"><option>等待權限...</option></select>
+        <button id="refresh-cam">重新整理相機列表</button>
+
+        <div style="font-weight:bold; color:#00d2ff; margin-top:5px;">2. 麥克風與口型</div>
+        <button id="start-mic">啟動麥克風偵測</button>
+        <div class="hint">靈敏度 (避開風聲):</div>
+        <input type="range" id="sens-slider" min="0" max="100" value="45">
         
-        <label>2. 選擇相機 (選USB那組):</label>
-        <select id="cam-select"><option>偵測相機中...</option></select>
-        
-        <div>麥克風靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="45"></div>
-        <button id="hide-ui-btn" style="background:#666">隱藏介面 (點擊畫面顯示)</button>
-        <div style="color:#ffcc00; font-size:10px;">提醒: 1GB流量請在直播App設為360p</div>
+        <button id="hide-ui-btn" style="background:#444; color:white; margin-top:10px;">隱藏介面 (點擊畫面喚回)</button>
     </div>
 </div>
 
@@ -48,32 +50,39 @@
     const sensSlider = document.getElementById('sens-slider');
     
     let isBlinking = false, isTalking = false, currentStream = null;
-    let talkTimer = 0; // 說話緩衝計時器
+    let talkTimeout = null; // 用來維持嘴巴張開的時間
 
-    // --- 相機清單與啟動 ---
-    async function getDevices() {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        camSelect.innerHTML = "";
-        videoDevices.forEach((device, index) => {
-            const opt = document.createElement('option');
-            opt.value = device.deviceId;
-            opt.text = device.label || `相機 ${index + 1}`;
-            camSelect.appendChild(opt);
-        });
+    // --- 相機清單功能 ---
+    async function updateCamList() {
+        try {
+            // 先請求一次權限，否則拿不到設備名稱
+            await navigator.mediaDevices.getUserMedia({ video: true });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            
+            camSelect.innerHTML = '';
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `相機 ${index + 1}`;
+                camSelect.appendChild(option);
+            });
+        } catch (e) {
+            alert("請允許相機權限以選取設備");
+        }
     }
 
-    async function startCamera(deviceId) {
+    async function switchCamera(deviceId) {
         if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-        // 降低解析度以省電 (滑雪手機很怕冷)
-        const constraints = { video: { deviceId: { exact: deviceId }, width: 640, height: 480 } };
+        const constraints = { video: { deviceId: { exact: deviceId } } };
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
     }
 
-    camSelect.onchange = () => startCamera(camSelect.value);
+    camSelect.onchange = () => switchCamera(camSelect.value);
+    document.getElementById('refresh-cam').onclick = updateCamList;
 
-    // --- 聲音偵測 (優化說話緩衝) ---
+    // --- 聲音偵測優化 ---
     document.getElementById('start-mic').onclick = async () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const audioContext = new AudioContext();
@@ -81,7 +90,7 @@
         const microphone = audioContext.createMediaStreamSource(stream);
         const node = audioContext.createScriptProcessor(2048, 1, 1);
         
-        analyser.fftSize = 512;
+        analyser.fftSize = 1024;
         microphone.connect(analyser);
         analyser.connect(node);
         node.connect(audioContext.destination);
@@ -90,48 +99,53 @@
             const array = new Uint8Array(analyser.frequencyBinCount);
             analyser.getByteFrequencyData(array);
             let sum = array.reduce((a, b) => a + b, 0);
-            let average = sum / array.length;
+            let volume = sum / array.length;
             
-            let threshold = 105 - sensSlider.value;
-            
-            if (average > threshold) {
+            // 靈敏度判斷
+            if (volume > (105 - sensSlider.value)) {
                 isTalking = true;
-                talkTimer = 15; // 延長張嘴時間約 0.3 秒 (15幀)
-            } else {
-                if (talkTimer > 0) {
-                    talkTimer--;
-                    isTalking = true;
-                } else {
+                // 一旦偵測到說話，清除計時器，保持張嘴
+                if (talkTimeout) clearTimeout(talkTimeout);
+                talkTimeout = setTimeout(() => {
                     isTalking = false;
-                }
+                    updateAvatar();
+                }, 250); // 說話結束後，嘴巴多維持 0.25 秒，避免閃爍
             }
             updateAvatar();
         };
-        document.getElementById('start-mic').innerText = "麥克風運作中";
+        document.getElementById('start-mic').innerText = "麥克風偵測中...";
+        document.getElementById('start-mic').style.background = "#55ff55";
         blinkLoop();
     };
 
     function updateAvatar() {
-        if (isBlinking) avatar.src = imgs.blink;
-        else avatar.src = isTalking ? imgs.talk : imgs.idle;
+        // 邏輯優先級：眨眼中顯示眨眼，其餘根據說話狀態切換
+        if (isBlinking) {
+            avatar.src = imgs.blink;
+        } else {
+            avatar.src = isTalking ? imgs.talk : imgs.idle;
+        }
     }
 
     function blinkLoop() {
-        // 縮短檢測，讓眨眼更有反應
+        // 隨機眨眼
         setTimeout(() => {
-            isBlinking = true; updateAvatar();
-            setTimeout(() => { isBlinking = false; updateAvatar(); blinkLoop(); }, 180);
-        }, Math.random() * 4000 + 2500);
+            isBlinking = true;
+            updateAvatar();
+            setTimeout(() => {
+                isBlinking = false;
+                updateAvatar();
+                blinkLoop();
+            }, 180); // 眨眼時間
+        }, Math.random() * 4000 + 2000);
     }
 
     // 初始化
-    navigator.mediaDevices.getUserMedia({video:true}).then(() => {
-        getDevices();
-    });
-
-    document.getElementById('container').onclick = (e) => { 
-        if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') 
-            document.getElementById('ui-layer').classList.toggle('hidden'); 
+    updateCamList();
+    document.getElementById('container').onclick = (e) => {
+        if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+            document.getElementById('ui-layer').classList.toggle('hidden');
+        }
     };
     document.getElementById('hide-ui-btn').onclick = () => document.getElementById('ui-layer').classList.add('hidden');
 </script>
