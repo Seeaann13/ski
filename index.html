@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber Pro</title>
+    <title>Ski-VTuber Solo Pro</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         #container { position: relative; width: 100vw; height: 100vh; }
@@ -14,10 +14,11 @@
         }
         #ui-layer {
             position: absolute; top: 10px; left: 10px; z-index: 20;
-            background: rgba(0, 0, 0, 0.7); padding: 15px; border-radius: 12px;
-            color: white; display: flex; flex-direction: column; gap: 10px;
+            background: rgba(0, 0, 0, 0.8); padding: 12px; border-radius: 12px;
+            color: white; display: flex; flex-direction: column; gap: 8px; font-size: 13px;
         }
-        button { padding: 10px; font-size: 14px; cursor: pointer; background: #00d2ff; border: none; border-radius: 6px; color: #003344; font-weight: 800; }
+        button { padding: 8px; cursor: pointer; background: #00d2ff; border: none; border-radius: 4px; font-weight: bold; }
+        select { padding: 5px; background: #333; color: white; border-radius: 4px; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -25,11 +26,17 @@
 <div id="container">
     <video id="camera-video" autoplay playsinline muted></video>
     <img id="avatar-layer" src="idle.png">
+    
     <div id="ui-layer">
-        <button id="start-btn">1. 啟動麥克風</button>
-        <button id="switch-cam-btn">2. 切換相機 (選USB)</button>
-        <div style="font-size:12px;">麥克風靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="40"></div>
-        <button id="hide-ui-btn">隱藏介面 (點擊畫面顯示)</button>
+        <b style="color:#00d2ff">SKI-TUBER 實戰版</b>
+        <button id="start-mic">1. 啟動麥克風</button>
+        
+        <label>2. 選擇相機 (選USB那組):</label>
+        <select id="cam-select"><option>偵測相機中...</option></select>
+        
+        <div>麥克風靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="45"></div>
+        <button id="hide-ui-btn" style="background:#666">隱藏介面 (點擊畫面顯示)</button>
+        <div style="color:#ffcc00; font-size:10px;">提醒: 1GB流量請在直播App設為360p</div>
     </div>
 </div>
 
@@ -37,48 +44,70 @@
     const imgs = { idle: 'idle.png', talk: 'talk.png', blink: 'blink.png' };
     const avatar = document.getElementById('avatar-layer');
     const video = document.getElementById('camera-video');
+    const camSelect = document.getElementById('cam-select');
     const sensSlider = document.getElementById('sens-slider');
     
     let isBlinking = false, isTalking = false, currentStream = null;
+    let talkTimer = 0; // 說話緩衝計時器
 
-    // --- 相機切換邏輯 ---
-    async function startCamera(deviceId = null) {
-        if (currentStream) currentStream.getTracks().forEach(track => track.stop());
-        const constraints = {
-            video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' },
-            audio: false
-        };
+    // --- 相機清單與啟動 ---
+    async function getDevices() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        camSelect.innerHTML = "";
+        videoDevices.forEach((device, index) => {
+            const opt = document.createElement('option');
+            opt.value = device.deviceId;
+            opt.text = device.label || `相機 ${index + 1}`;
+            camSelect.appendChild(opt);
+        });
+    }
+
+    async function startCamera(deviceId) {
+        if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+        // 降低解析度以省電 (滑雪手機很怕冷)
+        const constraints = { video: { deviceId: { exact: deviceId }, width: 640, height: 480 } };
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
     }
 
-    document.getElementById('switch-cam-btn').onclick = async () => {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        // 簡單循環切換所有相機
-        let nextIndex = (videoDevices.findIndex(d => d.label === currentStream.getVideoTracks()[0].label) + 1) % videoDevices.length;
-        startCamera(videoDevices[nextIndex].deviceId);
-    };
+    camSelect.onchange = () => startCamera(camSelect.value);
 
-    // --- 聲音偵測 ---
-    document.getElementById('start-btn').onclick = async () => {
+    // --- 聲音偵測 (優化說話緩衝) ---
+    document.getElementById('start-mic').onclick = async () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const audioContext = new AudioContext();
         const analyser = audioContext.createAnalyser();
         const microphone = audioContext.createMediaStreamSource(stream);
         const node = audioContext.createScriptProcessor(2048, 1, 1);
-        analyser.fftSize = 1024;
+        
+        analyser.fftSize = 512;
         microphone.connect(analyser);
         analyser.connect(node);
         node.connect(audioContext.destination);
+
         node.onaudioprocess = () => {
             const array = new Uint8Array(analyser.frequencyBinCount);
             analyser.getByteFrequencyData(array);
             let sum = array.reduce((a, b) => a + b, 0);
-            isTalking = (sum / array.length) > (105 - sensSlider.value);
+            let average = sum / array.length;
+            
+            let threshold = 105 - sensSlider.value;
+            
+            if (average > threshold) {
+                isTalking = true;
+                talkTimer = 15; // 延長張嘴時間約 0.3 秒 (15幀)
+            } else {
+                if (talkTimer > 0) {
+                    talkTimer--;
+                    isTalking = true;
+                } else {
+                    isTalking = false;
+                }
+            }
             updateAvatar();
         };
-        document.getElementById('start-btn').innerText = "麥克風已啟動";
+        document.getElementById('start-mic').innerText = "麥克風運作中";
         blinkLoop();
     };
 
@@ -88,14 +117,22 @@
     }
 
     function blinkLoop() {
+        // 縮短檢測，讓眨眼更有反應
         setTimeout(() => {
             isBlinking = true; updateAvatar();
-            setTimeout(() => { isBlinking = false; updateAvatar(); blinkLoop(); }, 200); // 眨眼時間稍微延長到0.2秒
-        }, Math.random() * 4000 + 2000);
+            setTimeout(() => { isBlinking = false; updateAvatar(); blinkLoop(); }, 180);
+        }, Math.random() * 4000 + 2500);
     }
 
-    startCamera(); // 預設先開一個相機
-    document.getElementById('container').onclick = (e) => { if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') document.getElementById('ui-layer').classList.toggle('hidden'); };
+    // 初始化
+    navigator.mediaDevices.getUserMedia({video:true}).then(() => {
+        getDevices();
+    });
+
+    document.getElementById('container').onclick = (e) => { 
+        if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') 
+            document.getElementById('ui-layer').classList.toggle('hidden'); 
+    };
     document.getElementById('hide-ui-btn').onclick = () => document.getElementById('ui-layer').classList.add('hidden');
 </script>
 </body>
