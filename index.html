@@ -3,39 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber Solo Pro V3.2</title>
+    <title>Ski-VTuber V4 Hardware Test</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        #container { position: relative; width: 100vw; height: 100vh; background: #000; }
-        #camera-video { width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #container { position: relative; width: 100vw; height: 100vh; background: #111; }
         
+        /* 攝影機畫面 */
+        #camera-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+
         /* V皮層 */
         .avatar-group {
-            position: absolute; bottom: -5px; right: -10px;
-            width: 45vw; height: auto; pointer-events: none; z-index: 10;
+            position: absolute; bottom: 0; right: 0;
+            width: 45vw; pointer-events: none; z-index: 10;
         }
         .part {
-            position: absolute; bottom: 0; right: 0;
-            width: 100%; height: auto;
-            opacity: 0; visibility: hidden; /* 預設完全隱藏 */
-            transition: transform 0.05s linear;
+            position: absolute; bottom: 0; right: 0; width: 100%; height: auto;
+            visibility: hidden; opacity: 0; transition: opacity 0.1s;
         }
-        #base-body { z-index: 11; opacity: 1; visibility: visible; }
-        #mouth-part { z-index: 12; } 
-        #eyes-part { z-index: 13; }
+        #base-body { visibility: visible; opacity: 1; position: relative; }
+        #mouth-part, #eyes-part { z-index: 12; }
 
-        /* UI 面板 */
+        /* 除錯與控制面板 */
         #ui-layer {
-            position: absolute; top: 10px; left: 10px; z-index: 100;
-            background: rgba(0, 0, 0, 0.85); padding: 15px; border-radius: 12px;
-            color: white; display: flex; flex-direction: column; gap: 10px; width: 260px;
-            backdrop-filter: blur(10px); border: 1px solid rgba(0, 210, 255, 0.3);
+            position: absolute; top: 0; left: 0; width: 100%; z-index: 100;
+            background: rgba(0,0,0,0.85); color: #0f0; font-family: monospace;
+            padding: 10px; box-sizing: border-box; font-size: 12px;
+            display: flex; flex-direction: column; gap: 8px;
         }
-        button { padding: 12px; background: #00d2ff; border: none; border-radius: 6px; color: #003344; font-weight: 800; cursor: pointer; }
-        .adjust-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; background: rgba(255,255,255,0.05); padding: 5px 8px; border-radius: 5px; }
-        .btn-sm { padding: 6px 12px; background: #444; color: white; border-radius: 4px; border: 1px solid #666; }
-        select { padding: 8px; border-radius: 4px; background: #222; color: white; border: 1px solid #444; width: 100%; }
-        .hint { font-size: 11px; color: #00d2ff; font-weight: bold; }
+        
+        .row { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+        select { background: #222; color: #fff; border: 1px solid #555; padding: 5px; max-width: 100%; }
+        button { background: #00d2ff; color: #000; border: none; padding: 8px 15px; font-weight: bold; border-radius: 4px; }
+        .stat-box { background: #333; padding: 5px; border-radius: 4px; color: #fff; }
+        
+        #close-ui { position: absolute; top: 10px; right: 10px; background: #c33; color: white; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -49,63 +50,185 @@
         <img id="mouth-part" class="part" src="mouth_open.png">
         <img id="eyes-part" class="part" src="eyes_closed.png">
     </div>
-    
-    <div id="ui-layer">
-        <div style="text-align:center; font-weight:900; color:#00d2ff; letter-spacing: 1px;">SKI-VTUBER V3.2</div>
-        
-        <label class="hint">1. 選相機 (外接鏡頭通常在最後)</label>
-        <select id="cam-select"></select>
-        <button id="start-btn">啟動系統 (相機+麥克風)</button>
-        
-        <label class="hint">2. 位置微調</label>
-        <div class="adjust-row">嘴巴: <div><button class="btn-sm" onclick="adjust('mouth', -2)">↑</button> <button class="btn-sm" onclick="adjust('mouth', 2)">↓</button></div></div>
-        <div class="adjust-row">眼睛: <div><button class="btn-sm" onclick="adjust('eyes', -2)">↑</button> <button class="btn-sm" onclick="adjust('eyes', 2)">↓</button></div></div>
 
-        <div style="font-size:12px; display: flex; justify-content: space-between;">
-            靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="45" style="width: 70%;">
-        </div>
+    <div id="ui-layer">
+        <div style="font-size:14px; color:#00d2ff; font-weight:bold;">硬體測試模式 (Hardware Debug)</div>
+        <button id="close-ui">隱藏面板 (直播模式)</button>
         
-        <button id="hide-ui-btn" style="background:#cc3333; color:white; font-size:12px;">準備直播 (隱藏介面)</button>
+        <div class="row">
+            <label>1. 選擇鏡頭:</label>
+            <select id="cam-select"><option>偵測中...</option></select>
+            <button id="refresh-cam">重整</button>
+        </div>
+
+        <div class="row">
+            <label>2. 強制解析度 (ESP32建議選 Low):</label>
+            <select id="res-select">
+                <option value="low" selected>Low (320x240) - 順暢推薦</option>
+                <option value="mid">Mid (640x480) - 可能卡頓</option>
+                <option value="high">High (1280x720) - 容易崩潰</option>
+            </select>
+        </div>
+
+        <button id="start-btn" style="width:100%; margin-top:5px;">啟動相機 & V皮</button>
+        
+        <div class="row" style="margin-top:5px; border-top:1px solid #555; padding-top:5px;">
+            <div class="stat-box">狀態: <span id="status-text">待機</span></div>
+            <div class="stat-box">實際尺寸: <span id="debug-res">0x0</span></div>
+            <div class="stat-box">口型靈敏度: <input type="range" id="sens-slider" min="0" max="100" value="50" style="width:60px; vertical-align:middle;"></div>
+        </div>
     </div>
 </div>
 
 <script>
-    const mouth = document.getElementById('mouth-part');
-    const eyes = document.getElementById('eyes-part');
     const video = document.getElementById('camera-video');
     const camSelect = document.getElementById('cam-select');
-    const sensSlider = document.getElementById('sens-slider');
+    const resSelect = document.getElementById('res-select');
+    const statusText = document.getElementById('status-text');
+    const debugRes = document.getElementById('debug-res');
     
-    let isTalking = false, talkTimeout = null, currentStream = null;
-    let offsets = { mouth: 0, eyes: 0 };
+    const mouth = document.getElementById('mouth-part');
+    const eyes = document.getElementById('eyes-part');
+    
+    let currentStream = null;
+    let isTalking = false, talkTimeout = null;
 
-    // --- 零件顯示切換優化 ---
-    function setPartVisible(el, isVisible) {
-        if (isVisible) {
-            el.style.opacity = "1";
-            el.style.visibility = "visible";
-        } else {
-            el.style.opacity = "0";
-            el.style.visibility = "hidden";
-        }
-    }
-
-    function adjust(part, val) {
-        offsets[part] += val;
-        const target = (part === 'mouth') ? mouth : eyes;
-        target.style.transform = `translateY(${offsets[part]}px)`;
-    }
-
-    // --- 相機偵測 ---
-    async function initCameras() {
+    // --- 1. 列舉所有鏡頭 ---
+    async function listCameras() {
         try {
-            await navigator.mediaDevices.getUserMedia({ video: true });
+            await navigator.mediaDevices.getUserMedia({ video: true }); // 先請求權限
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            
             camSelect.innerHTML = '';
+            
+            if (videoDevices.length === 0) {
+                camSelect.innerHTML = '<option>未偵測到鏡頭</option>';
+                return;
+            }
+
             videoDevices.forEach((d, i) => {
                 const opt = document.createElement('option');
                 opt.value = d.deviceId;
+                // 嘗試標記出 USB 鏡頭
+                let label = d.label || `Camera ${i+1}`;
+                if (label.toLowerCase().includes('usb') || label.toLowerCase().includes('external')) {
+                    label = `[USB] ${label}`;
+                    opt.style.color = '#0f0'; // 綠色標記
+                }
+                opt.text = label;
+                camSelect.appendChild(opt);
+            });
+            statusText.innerText = `抓到 ${videoDevices.length} 個鏡頭`;
+        } catch (e) {
+            statusText.innerText = "權限錯誤: " + e.message;
+        }
+    }
+
+    // --- 2. 啟動鏡頭 (核心邏輯) ---
+    async function startCamera() {
+        if (currentStream) {
+            currentStream.getTracks().forEach(t => t.stop());
+        }
+
+        const deviceId = camSelect.value;
+        const quality = resSelect.value;
+        
+        // ESP32-S3 必須用低解析度
+        let constraints = {
+            video: {
+                deviceId: { exact: deviceId },
+                // 寬容模式：盡量滿足，不滿足就用最接近的
+                width: quality === 'low' ? { ideal: 320 } : (quality === 'mid' ? { ideal: 640 } : { ideal: 1280 }),
+                height: quality === 'low' ? { ideal: 240 } : (quality === 'mid' ? { ideal: 480 } : { ideal: 720 }),
+                frameRate: { ideal: 15, max: 30 } // ESP32 跑 15fps 比較穩
+            },
+            audio: false 
+        };
+
+        try {
+            statusText.innerText = "連接中...";
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = currentStream;
+            
+            // 監聽實際解析度
+            video.onloadedmetadata = () => {
+                debugRes.innerText = `${video.videoWidth}x${video.videoHeight}`;
+                statusText.innerText = "畫面正常";
+            };
+
+            startAudio(); // 啟動麥克風
+            startAutoBlink(); // 啟動眨眼
+
+        } catch (err) {
+            statusText.innerText = "啟動失敗: " + err.name;
+            alert("瀏覽器無法抓取此 USB 設備。\n可能原因：\n1. Android 系統獨佔了設備\n2. 解析度不支援\n建議：重插 USB 線再試一次");
+        }
+    }
+
+    // --- 3. 麥克風邏輯 ---
+    async function startAudio() {
+        try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const analyser = audioCtx.createAnalyser();
+            const source = audioCtx.createMediaStreamSource(audioStream);
+            const scriptNode = audioCtx.createScriptProcessor(2048, 1, 1);
+            
+            analyser.fftSize = 512;
+            source.connect(analyser);
+            analyser.connect(scriptNode);
+            scriptNode.connect(audioCtx.destination);
+            
+            scriptNode.onaudioprocess = () => {
+                const array = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(array);
+                const vol = array.reduce((a, b) => a + b) / array.length;
+                const threshold = 105 - document.getElementById('sens-slider').value;
+                
+                if (vol > threshold) {
+                    isTalking = true;
+                    setPart(mouth, true);
+                    if (talkTimeout) clearTimeout(talkTimeout);
+                    talkTimeout = setTimeout(() => {
+                        isTalking = false;
+                        setPart(mouth, false);
+                    }, 200);
+                }
+            };
+        } catch (e) { console.error("Audio error", e); }
+    }
+
+    // --- 4. 輔助功能 ---
+    function setPart(el, show) {
+        el.style.opacity = show ? 1 : 0;
+        el.style.visibility = show ? 'visible' : 'hidden';
+    }
+
+    function startAutoBlink() {
+        setTimeout(() => {
+            setPart(eyes, true);
+            setTimeout(() => {
+                setPart(eyes, false);
+                startAutoBlink();
+            }, 180);
+        }, Math.random() * 4000 + 2000);
+    }
+
+    // 事件綁定
+    document.getElementById('refresh-cam').onclick = listCameras;
+    document.getElementById('start-btn').onclick = startCamera;
+    document.getElementById('close-ui').onclick = () => document.getElementById('ui-layer').classList.add('hidden');
+    document.getElementById('container').onclick = (e) => {
+        if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'INPUT') 
+            document.getElementById('ui-layer').classList.toggle('hidden');
+    };
+
+    // 初始化
+    listCameras();
+</script>
+</body>
+</html>                opt.value = d.deviceId;
                 opt.text = d.label || `Camera ${i+1}`;
                 if (d.label.toLowerCase().includes('usb') || i === videoDevices.length - 1) opt.selected = true;
                 camSelect.appendChild(opt);
