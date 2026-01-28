@@ -3,127 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber V8.4 FINAL - 3D Layered</title>
+    <title>Ski-VTuber V9.2 Depth Pro</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-        #camera-video { width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+        body { margin: 0; padding: 0; overflow: hidden; background: transparent; font-family: sans-serif; }
+        #container { position: relative; width: 100vw; height: 100vh; }
 
-        /* V皮整體容器 */
-        #avatar-container { position: absolute; bottom: -5px; right: -5px; width: 45vw; height: auto; pointer-events: none; z-index: 10; }
+        /* V皮總成 (呼吸律動) */
+        #avatar-root {
+            position: absolute; bottom: 0; right: 0; width: 45vw; height: auto;
+            pointer-events: none;
+            /* 讓身體、後領一起呼吸 */
+            animation: breathe 3s ease-in-out infinite;
+        }
 
-        /* 零件層級與動畫 */
-        .part { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; transition: transform 0.1s ease-out; }
+        .layer { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; transform-origin: top center; }
 
-        /* 堆疊順序：從底層到頂層 */
-        #body { z-index: 11; animation: breathe 4s ease-in-out infinite; } /* 1. 外套前半部 */
-        #out_jacket { z-index: 12; animation: breathe 4s ease-in-out infinite; } /* 2. 外套後部 (擋住頭頸部後面) */
-        #head { z-index: 13; animation: head-sway 5s ease-in-out infinite; transform-origin: bottom center; } /* 3. 頭部底座 */
-        #ears { z-index: 14; animation: ear-twitch 2.5s ease-in-out infinite; transform-origin: center top; } /* 4. 耳朵 */
-        #hair { z-index: 15; animation: hair-flutter 3.5s ease-in-out infinite; transform-origin: center top; } /* 5. 瀏海 */
-        #mouth_close { z-index: 16; } /* 6. 閉嘴貼紙 */
-        #eyes_closed { z-index: 17; opacity: 0; visibility: hidden; } /* 7. 閉眼貼紙 */
+        /* --- 關鍵：前後層級 (Z-Index) --- */
+        /* 數字越小越後面 */
+        
+        .z-0  { z-index: 5; }   /* 最底層 (如果有背景光環之類) */
+        .z-10 { z-index: 10; }  /* 身體 (Body) */
+        .z-15 { z-index: 15; }  /* ★ 關鍵：頭後面的外套/領子 (Jacket Back) */
+        .z-20 { z-index: 20; }  /* 頭部主體 (Head) */
+        .z-21 { z-index: 21; }  /* 五官 (Face Parts) */
+        .z-30 { z-index: 30; }  /* 前髮 (Front Hair) */
+        .z-40 { z-index: 40; }  /* 呆毛/最頂層 */
 
-        /* 動畫效果碼 - 保持不變 */
-        @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
-        @keyframes head-sway { 0%, 100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(0.8deg) translateY(-3px); } }
-        @keyframes ear-twitch { 0%, 80% { transform: rotate(0deg); } 85% { transform: rotate(2deg); } 95% { transform: rotate(-1deg); } }
-        @keyframes hair-flutter { 0%, 100% { transform: skewX(0.5deg) translateX(0); } 50% { transform: skewX(1.8deg) translateX(3px); } }
+        /* --- 物理動態 --- */
+        /* 頭部獨立擺動 (才不會跟身體黏死) */
+        .head-sway { animation: head-move 4s ease-in-out infinite; transform-origin: center 80%; }
+        
+        /* 輕微的風 */
+        .wind-light { animation: flutter 0.5s ease-in-out infinite alternate; }
+        .wind-mid   { animation: sway 1.5s ease-in-out infinite alternate; }
+        .delay-1 { animation-delay: 0.2s; }
+        .delay-2 { animation-delay: 0.5s; }
 
-        /* UI - 保持不變 */
-        #ui { position: absolute; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.85); color: #00d2ff; padding: 15px; border-radius: 12px; width: 260px; border: 1px solid #00d2ff; }
-        button { padding: 10px; background: #00d2ff; border: none; border-radius: 6px; font-weight: 800; cursor: pointer; width: 100%; margin: 5px 0; }
-        .adj-box { background: rgba(255,255,255,0.1); padding: 5px; border-radius: 5px; margin-top: 5px; font-size: 11px; color: white; }
-        .hidden { display: none !important; }
+        @keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.015)} }
+        @keyframes head-move { 0%,100%{transform:rotate(0deg)} 50%{transform:rotate(1.5deg)} }
+        @keyframes flutter { 0%{transform:skewX(1deg)} 100%{transform:skewX(3deg)} }
+        @keyframes sway    { 0%{transform:skewX(-1deg)} 100%{transform:skewX(2deg)} }
+
+        #ui { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 8px; z-index: 100; font-size: 12px; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
 <div id="container">
-    <video id="camera-video" autoplay playsinline muted></video>
-    
-    <div id="avatar-container">
-        <!-- 檔案名稱適應你的 Procreate 輸出 -->
-        <img id="body" class="part" src="body.png">
-        <img id="out_jacket" class="part" src="Out_jacket.png"> <!-- 新增的外套後部 -->
-        <img id="head" class="part" src="head.png">
-        <img id="ears" class="part" src="ears.png">
-        <img id="hair" class="part" src="hair.png">
-        <img id="mouth_close" class="part" src="mouth_close.png">
-        <img id="eyes_closed" class="part" src="eyes_closed.png">
-    </div>
-    
-    <div id="ui">
-        <b>SKI-VTUBER V8.4 FINAL</b><br>
-        <button id="start-btn">1. 啟動系統</button>
-        <div class="adj-box">
-            調整高度：<br>
-            嘴巴: <button onclick="adj('mouth_close',-2)" style="width:30px; padding:2px;">↑</button><button onclick="adj('mouth_close',2)" style="width:30px; padding:2px;">↓</button>
-            眼睛: <button onclick="adj('eyes_closed',-2)" style="width:30px; padding:2px;">↑</button><button onclick="adj('eyes_closed',2)" style="width:30px; padding:2px;">↓</button>
+    <div id="avatar-root">
+        
+        <!-- [層級 1] 身體主體 -->
+        <img id="body" class="layer z-10" src="body.png">
+
+        <!-- [層級 2] ★ 關鍵：頭後面的外套/後領 (補在這裡！) -->
+        <!-- 這張圖會蓋住身體，但在頭的後面 -->
+        <img id="jacket_back" class="layer z-15" src="jacket_back.png">
+
+        <!-- [層級 3] 頭部群組 (包含頭、五官、耳朵) -->
+        <!-- 加上 head-sway 讓頭跟領子有相對運動 -->
+        <div class="layer z-20 head-sway" style="width:100%; height:100%;">
+            
+            <img id="head" class="layer" src="head.png">
+            <img id="ears" class="layer" src="ears.png" style="animation: flutter 2s infinite;">
+
+            <!-- 表情 -->
+            <img id="mouth_closed" class="layer z-21" src="mouth_closed.png">
+            <img id="mouth_open"   class="layer z-21" src="mouth_open.png" style="opacity:0;">
+            <img id="eyes_open"    class="layer z-21" src="eyes_open.png">
+            <img id="eyes_closed"  class="layer z-21" src="eyes_closed.png" style="opacity:0;">
+
+            <!-- [層級 4] 頭髮 (在臉的前面) -->
+            <!-- 把你那十幾層頭髮放在這裡面 -->
+            <img id="hair_1" class="layer z-30 wind-mid" src="hair_1.png">
+            <img id="hair_2" class="layer z-30 wind-light delay-1" src="hair_2.png">
+            <img id="hair_3" class="layer z-30 wind-mid delay-2" src="hair_3.png">
+            <!-- 繼續加你的 hair_x.png ... -->
+
         </div>
-        <div style="font-size:10px; color:white; margin:5px 0;">麥克風靈敏度: <input type="range" id="sens" value="45" style="width:100px;"></div>
-        <button id="hide-btn" style="background:#cc3333; color:white;">2. 直播準備 (隱藏介面)</button>
+    </div>
+
+    <div id="ui">
+        <b>V9.2 深度防穿模版</b><br>
+        <button onclick="initAudio()">啟動同步</button>
+        <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#f55;">隱藏</button>
     </div>
 </div>
 
 <script>
-    const head = document.getElementById('head'); 
-    const mouth = document.getElementById('mouth_close'); 
-    const eyes = document.getElementById('eyes_closed');
-    let offsets = { mouth_close: 0, eyes_closed: 0 };
+    const mouthClosed = document.getElementById('mouth_closed');
+    const mouthOpen = document.getElementById('mouth_open');
+    const eyesOpen = document.getElementById('eyes_open');
+    const eyesClosed = document.getElementById('eyes_closed');
+    let talkTimeout;
 
-    function adj(p, v) { 
-        offsets[p] += v; 
-        document.getElementById(p).style.top = offsets[p] + 'px'; 
+    function setTalking(isTalking) {
+        mouthClosed.style.opacity = isTalking ? 0 : 1;
+        mouthOpen.style.opacity = isTalking ? 1 : 0;
     }
 
-    function setV(el, s) { 
-        el.style.opacity = s ? "1" : "0"; 
-        el.style.visibility = s ? "visible" : "hidden"; 
+    function blink() {
+        eyesOpen.style.opacity = 0; eyesClosed.style.opacity = 1;
+        setTimeout(() => {
+            eyesOpen.style.opacity = 1; eyesClosed.style.opacity = 0;
+            setTimeout(blink, Math.random() * 3000 + 2000);
+        }, 150);
     }
+    blink();
 
-    document.getElementById('start-btn').onclick = async () => {
+    async function initAudio() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment' }, audio: true 
-            });
-            document.getElementById('camera-video').srcObject = stream;
-
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const audioCtx = new AudioContext();
             const analyser = audioCtx.createAnalyser();
-            const src = audioCtx.createMediaStreamSource(stream);
-            const proc = audioCtx.createScriptProcessor(2048, 1, 1);
-            src.connect(analyser); analyser.connect(proc); proc.connect(audioCtx.destination);
-            
-            proc.onaudioprocess = () => {
+            const source = audioCtx.createMediaStreamSource(stream);
+            const script = audioCtx.createScriptProcessor(2048, 1, 1);
+            source.connect(analyser); analyser.connect(script); script.connect(audioCtx.destination);
+            script.onaudioprocess = () => {
                 const data = new Uint8Array(analyser.frequencyBinCount);
                 analyser.getByteFrequencyData(data);
-                const vol = data.reduce((a,b)=>a+b)/data.length;
-                
-                // 嘴巴動作邏輯：利用臉部位移模擬說話
-                if (vol > (105 - document.getElementById('sens').value)) {
-                    head.style.transform = "scale(0.99) rotate(-0.5deg)"; 
-                    mouth.style.transform = `translateY(${offsets.mouth_close + 1}px)`; 
-                } else {
-                    head.style.transform = ""; 
-                    mouth.style.transform = `translateY(${offsets.mouth_close}px)`;
+                if ((data.reduce((a,b)=>a+b)/data.length) > 20) {
+                    setTalking(true); clearTimeout(talkTimeout);
+                    talkTimeout = setTimeout(() => setTalking(false), 150);
                 }
             };
-
-            // 自動眨眼
-            const blink = () => {
-                setV(eyes, true);
-                setTimeout(() => setV(eyes, false), 150);
-                setTimeout(blink, Math.random() * 4000 + 2000);
-            };
-            blink();
-
-            document.getElementById('start-btn').innerText = "系統運行中...";
-        } catch(e) { alert("啟動失敗，請確認已給予權限"); }
-    };
-
-    document.getElementById('hide-btn').onclick = () => document.getElementById('ui').classList.add('hidden');
-    document.body.onclick = (e) => { if(e.target.tagName==='VIDEO') document.getElementById('ui').classList.toggle('hidden'); };
+            document.querySelector('button').innerText = "監聽中...";
+        } catch(e) {}
+    }
+    document.body.ondblclick = () => document.getElementById('ui').classList.toggle('hidden');
 </script>
+
 </body>
 </html>
