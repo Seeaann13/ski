@@ -3,25 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber V10.6 Stability</title>
+    <title>Ski-VTuber V10.3 Sandwich Fix</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; -webkit-user-select: none; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
         
         #ui {
-            position: absolute; top: 10px; left: 10px; width: 240px; z-index: 100;
-            background: rgba(10, 10, 10, 0.9); color: #fff; padding: 15px; 
-            border-radius: 12px; border: 1px solid #444; font-size: 12px;
+            position: absolute; top: 10px; left: 10px; width: 260px; z-index: 100;
+            background: rgba(0, 0, 0, 0.9); color: #00d2ff; padding: 15px; 
+            border-radius: 12px; border: 1px solid #00d2ff; font-size: 13px;
         }
         
-        input[type=range] { width: 100%; margin: 8px 0; accent-color: #00ffcc; }
-        label { color: #888; display: flex; justify-content: space-between; }
+        label { display: block; margin-top: 5px; color: #fff; font-size: 12px; }
+        input[type=range] { width: 100%; accent-color: #00d2ff; margin: 2px 0; }
+        .row { display: flex; gap: 5px; }
+        
         button { 
-            background: #00ffcc; color: #000; border: none; padding: 10px; 
+            background: #00d2ff; color: #000; border: none; padding: 10px; 
             width: 100%; border-radius: 6px; font-weight: bold; margin-top: 10px;
         }
-        #audio-bar { width: 100%; height: 4px; background: #333; margin-top:5px; border-radius:2px; }
-        #audio-val { width: 0%; height: 100%; background: #00ffcc; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -30,74 +30,119 @@
 <canvas id="vtuber-canvas"></canvas>
 
 <div id="ui">
-    <div style="text-align:center; color:#00ffcc; font-weight:bold; margin-bottom:10px;">V10.6 結構修復版</div>
+    <div style="text-align:center; font-weight:900; margin-bottom:5px;">V10.3 圖層修復版</div>
     
-    <label>X (左右)</label><input type="range" id="p-x" min="-300" max="300" value="0">
-    <label>Y (上下)</label><input type="range" id="p-y" min="-200" max="500" value="100">
-    <label>大小 (Scale)</label><input type="range" id="p-scale" min="0.2" max="2.5" step="0.01" value="0.85">
-    <label>風力 (Wind - 斜切)</label><input type="range" id="p-wind" min="0" max="10" step="0.1" value="2.0">
+    <label>1. 位置調整 (X / Y / 大小)</label>
+    <div class="row">
+        <input type="range" id="p-x" min="-200" max="200" value="0">
+        <input type="range" id="p-y" min="-200" max="300" value="100">
+    </div>
+    <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
 
-    <label>音量:</label><div id="audio-bar"><div id="audio-val"></div></div>
-
-    <button id="btn-start">啟動系統 (Start)</button>
-    <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#333; color:#aaa; margin-top:5px;">隱藏介面</button>
+    <label>2. 物理參數 (風力 / 限制)</label>
+    <input type="range" id="p-wind" min="0" max="10" step="0.1" value="2.0">
+    
+    <button id="btn-start">啟動系統</button>
+    <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#444; color:white;">隱藏</button>
+    <div id="status" style="color:#aaa; font-size:10px; text-align:center; margin-top:5px;">等待啟動...</div>
 </div>
 
 <script>
+    // --- 1. 物理核心 ---
+    class PhysicsLayer {
+        constructor(name, img, type, z) {
+            this.name = name;
+            this.img = img;
+            this.type = type; // static, head, face, hair
+            this.z = z;
+            
+            this.angle = 0;
+            this.velocity = 0;
+            this.visible = true;
+            this.id = name.split('.')[0]; 
+
+            // 物理材質
+            this.mass = 1.0; 
+            this.stiffness = 0.08; 
+            this.damping = 0.92;
+            
+            // 根據檔名分配材質
+            if (name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.12; }
+            if (name.includes('_H')) { this.mass = 3.0; this.stiffness = 0.03; this.damping = 0.90; }
+        }
+
+        update(windForce, headAngle) {
+            // 靜態物體不動
+            if (this.type === 'static') return;
+
+            // ★ 關鍵修復：五官 (Face) 直接鎖死在頭上，不進行物理運算，消除抖動
+            if (this.type === 'face') {
+                this.angle = headAngle;
+                return;
+            }
+
+            // 頭部：只有呼吸擺動
+            if (this.type === 'head') {
+                this.angle = headAngle;
+                return;
+            }
+
+            // 頭髮：受風力 + 慣性影響
+            // 限制最大風力 (Clamp)，防止歪掉
+            let effectiveWind = windForce * (2 - this.mass*0.4);
+            if (effectiveWind > 0.8) effectiveWind = 0.8 + (effectiveWind - 0.8) * 0.1; // 軟限制
+
+            let targetAngle = effectiveWind;
+            // 慣性：頭往左，頭髮往右
+            targetAngle += (headAngle * this.mass * 0.8);
+
+            const force = (targetAngle - this.angle) * this.stiffness;
+            const acceleration = force / this.mass;
+            this.velocity = (this.velocity + acceleration) * this.damping;
+            this.angle += this.velocity;
+        }
+    }
+
     const canvas = document.getElementById('vtuber-canvas');
     const ctx = canvas.getContext('2d');
     const video = document.createElement('video');
     video.autoplay = true; video.muted = true; video.playsInline = true;
+    
+    const layers = [];
+    let globalTime = 0;
 
-    // --- 1. 檔案清單 (確保檔名正確) ---
+    // --- 2. 檔案清單 (★ Z-Index 重新排序：三明治法) ---
     const fileList = [
-        // 後層
-        {n:'jacket_back.png', type:'static'},
-        // 身體 (必須在頭前面遮脖子)
-        {n:'body.png',        type:'body'},
-        // 頭部群組
-        {n:'head.png',        type:'head'},
-        {n:'ears.png',        type:'head'}, // 耳朵跟著頭轉
-        {n:'mouth_close.png', type:'mouth_close'},
-        {n:'mouth_open.png',  type:'mouth_open'},
-        {n:'eyes_open.png',   type:'eyes_open'},
-        {n:'eyes_closed.png', type:'eyes_closed'},
-        // 頭髮 (使用 Skew 物理)
-        {n:'hair_base.png',   type:'hair', weight: 0.5},
-        {n:'hair_H1.png',     type:'hair', weight: 0.8},
-        {n:'hair_H2.png',     type:'hair', weight: 0.8},
-        {n:'hair_M1.png',     type:'hair', weight: 1.2},
-        {n:'hair_M2.png',     type:'hair', weight: 1.2},
-        {n:'hair_L1.png',     type:'hair', weight: 2.0}, // 越輕數字越大
-        {n:'layer-front1.png',type:'hair', weight: 1.5},
-        {n:'layer-front2.png',type:'hair', weight: 1.5}
+        // 最底層：後領 (5)
+        {n:'jacket_back.png', t:'static', z:5},
+        
+        // 身體 (20)：為了蓋住脖子，身體要在頭前面！
+        // 如果你的身體圖包含了後領，那上面的 jacket_back 可以拿掉
+        {n:'body.png',        t:'static', z:20},
+
+        // 頭部 (10)：脖子在身體後面
+        {n:'head.png',        t:'head',   z:10},
+        
+        // 五官 (25)：要在身體前面
+        {n:'ears.png',        t:'face',   z:25}, // 耳朵改為 face 類型，跟隨頭
+        {n:'mouth_close.png', t:'face',   z:26, id:'m_close'},
+        {n:'mouth_open.png',  t:'face',   z:26, id:'m_open', v:false},
+        {n:'eyes_open.png',   t:'face',   z:27, id:'e_open'},
+        {n:'eyes_closed.png', t:'face',   z:27, id:'e_closed', v:false},
+        
+        // 頭髮 (30+)：最上層
+        {n:'hair_base.png',   t:'hair',   z:30},
+        {n:'hair_H1.png',     t:'hair',   z:31},
+        {n:'hair_H2.png',     t:'hair',   z:31},
+        {n:'hair_M1.png',     t:'hair',   z:32},
+        {n:'hair_M2.png',     t:'hair',   z:32},
+        {n:'hair_L1.png',     t:'hair',   z:33},
+        {n:'layer-front1.png',t:'hair',   z:35},
+        {n:'layer-front2.png',t:'hair',   z:35}
     ];
 
-    let layers = [];
-    let globalTime = 0;
-    let isTalking = false;
-    let isBlinking = false;
-
-    // --- 2. 資源載入 ---
-    async function loadAll() {
-        for (let f of fileList) {
-            const img = new Image();
-            img.src = f.n;
-            await new Promise(resolve => {
-                img.onload = () => {
-                    f.img = img;
-                    layers.push(f);
-                    resolve();
-                };
-                img.onerror = () => { console.log('缺圖: '+f.n); resolve(); };
-            });
-        }
-        draw();
-    }
-
-    // --- 3. 繪圖核心 (修復重點) ---
+    // --- 3. 繪圖核心 ---
     function draw() {
-        // 設定畫布
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr;
         canvas.height = window.innerHeight * dpr;
@@ -105,122 +150,122 @@
         const w = window.innerWidth;
         const h = window.innerHeight;
 
-        ctx.clearRect(0, 0, w, h);
+        ctx.clearRect(0,0,w,h);
 
         // 畫相機
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            const s = Math.max(w/video.videoWidth, h/video.videoHeight);
-            ctx.drawImage(video, (w-video.videoWidth*s)/2, (h-video.videoHeight*s)/2, video.videoWidth*s, video.videoHeight*s);
+            const s = Math.max(w / video.videoWidth, h / video.videoHeight);
+            ctx.drawImage(video, (w - video.videoWidth*s)/2, (h - video.videoHeight*s)/2, video.videoWidth*s, video.videoHeight*s);
         }
 
-        // 參數計算
+        // 物理計算
         globalTime += 0.05;
-        const uiScale = parseFloat(document.getElementById('p-scale').value);
-        const uiX = parseFloat(document.getElementById('p-x').value);
-        const uiY = parseFloat(document.getElementById('p-y').value);
-        const windPower = parseFloat(document.getElementById('p-wind').value);
+        // 風力
+        const windVal = parseFloat(document.getElementById('p-wind').value);
+        const wind = (windVal * 0.05) + (Math.sin(globalTime * 0.7) * 0.015);
+        // 頭部擺動 (呼吸 + 隨機)
+        const headAngle = Math.sin(globalTime * 0.5) * 0.03;
+        
+        // UI 參數
+        const scale = parseFloat(document.getElementById('p-scale').value);
+        const offX = parseFloat(document.getElementById('p-x').value);
+        const offY = parseFloat(document.getElementById('p-y').value);
 
-        // 基礎動態
-        const breathe = Math.sin(globalTime * 0.5) * 0.005; // 呼吸縮放
-        const headRot = Math.sin(globalTime * 0.5) * 0.02;  // 頭部輕微擺動
-        // 風力計算 (Skew 值)
-        const windSkew = (Math.sin(globalTime) * 0.01 + Math.cos(globalTime * 2.5) * 0.005) * windPower;
-
-        // --- 繪製迴圈 ---
+        // 繪製
         layers.forEach(l => {
-            if (!l.img) return;
-
-            // 表情控制
-            if (l.type === 'mouth_open' && !isTalking) return;
-            if (l.type === 'mouth_close' && isTalking) return;
-            if (l.type === 'eyes_closed' && !isBlinking) return;
-            if (l.type === 'eyes_open' && isBlinking) return;
+            if (!l.visible) return;
+            
+            // 更新物理 (傳入頭部角度)
+            l.update(wind, headAngle);
 
             ctx.save();
+            ctx.translate(w / 2 + offX, h + offY);
+            ctx.scale(scale, scale);
             
-            // 1. 全域定位 (移到螢幕下方中間 + 偏移)
-            ctx.translate(w / 2 + uiX, h + uiY);
-            ctx.scale(uiScale, uiScale);
-
-            // 2. 身體呼吸 (所有圖層都受影響)
-            ctx.scale(1, 1 + breathe);
-
-            // 3. 頭部旋轉 (身體不動，從頭開始轉)
-            if (l.type !== 'static' && l.type !== 'body') {
-                // 假設旋轉點在圖片高度的 30% 處 (脖子)
-                const pivotY = -l.img.height * 0.7; 
-                ctx.translate(0, pivotY);
-                ctx.rotate(headRot);
+            // 旋轉支點：設定在頭部下方 (脖子根部)
+            // 這樣頭轉動時，脖子根部是不動的
+            const pivotY = -l.img.height * 0.25; // 大約是從底部往上 25% 的位置
+            
+            if (l.type !== 'static') {
+                ctx.translate(0, pivotY); 
+                ctx.rotate(l.angle);      
                 ctx.translate(0, -pivotY);
             }
 
-            // 4. 頭髮飄動 (關鍵修復：使用 Skew)
-            if (l.type === 'hair') {
-                // 這裡的 Skew 會讓圖片變成平行四邊形，髮根不動，髮尾動
-                // weight 決定飄動幅度
-                ctx.transform(1, 0, windSkew * l.weight, 1, 0, 0);
-            }
-
-            // 5. 繪製圖片 (置中)
             ctx.drawImage(l.img, -l.img.width / 2, -l.img.height);
-            
             ctx.restore();
         });
 
         requestAnimationFrame(draw);
     }
 
-    // --- 4. 邏輯控制 ---
-    function startBlink() {
-        isBlinking = true;
+    // --- 4. 資源載入 ---
+    async function loadAll() {
+        const status = document.getElementById('status');
+        let loaded = 0;
+        for (let f of fileList) {
+            await new Promise(resolve => {
+                const img = new Image();
+                img.src = f.n;
+                img.onload = () => {
+                    const l = new PhysicsLayer(f.n, img, f.t, f.z);
+                    if (f.id) l.id = f.id; 
+                    if (f.v !== undefined) l.visible = f.v;
+                    layers.push(l);
+                    loaded++;
+                    status.innerText = `載入: ${Math.round(loaded/fileList.length*100)}%`;
+                    resolve();
+                };
+                img.onerror = () => resolve(); 
+            });
+        }
+        layers.sort((a,b) => a.z - b.z);
+        status.innerText = "準備完成";
+        draw(); 
+    }
+
+    // --- 5. 表情與啟動 ---
+    function toggleFace(part, isOpen) {
+        const openId = part === 'mouth' ? 'm_open' : 'e_open';
+        const closeId = part === 'mouth' ? 'm_close' : 'e_closed';
+        const openL = layers.find(l => l.id === openId);
+        const closeL = layers.find(l => l.id === closeId);
+        if (openL && closeL) { openL.visible = isOpen; closeL.visible = !isOpen; }
+    }
+
+    function autoBlink() {
+        toggleFace('eyes', false);
         setTimeout(() => {
-            isBlinking = false;
-            setTimeout(startBlink, Math.random() * 3000 + 2000);
+            toggleFace('eyes', true);
+            setTimeout(autoBlink, Math.random() * 3000 + 2000);
         }, 150);
     }
 
     document.getElementById('btn-start').onclick = async () => {
         try {
-            // 啟動相機
             const vStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             video.srcObject = vStream;
-
-            // 啟動音訊 (iOS 支援)
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            const audioCtx = new AudioContext();
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            await audioCtx.resume();
-
-            const analyser = audioCtx.createAnalyser();
-            const src = audioCtx.createMediaStreamSource(stream);
-            const script = audioCtx.createScriptProcessor(2048, 1, 1);
-            
-            src.connect(analyser); analyser.connect(script); script.connect(audioCtx.destination);
+            const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const ctx = new AudioContext();
+            const ana = ctx.createAnalyser();
+            const src = ctx.createMediaStreamSource(aStream);
+            const script = ctx.createScriptProcessor(2048, 1, 1);
+            src.connect(ana); ana.connect(script); script.connect(ctx.destination);
             
             script.onaudioprocess = () => {
-                const data = new Uint8Array(analyser.frequencyBinCount);
-                analyser.getByteFrequencyData(data);
+                const data = new Uint8Array(ana.frequencyBinCount);
+                ana.getByteFrequencyData(data);
                 const vol = data.reduce((a,b)=>a+b) / data.length;
-                document.getElementById('audio-val').style.width = Math.min(100, vol*2) + '%';
-                
                 if (vol > 20) {
-                    isTalking = true;
-                    clearTimeout(window.talkT);
-                    window.talkT = setTimeout(() => isTalking = false, 150);
+                    toggleFace('mouth', true);
+                    clearTimeout(window.tT); window.tT = setTimeout(() => toggleFace('mouth', false), 150);
                 }
             };
-
-            startBlink();
+            autoBlink();
             document.getElementById('btn-start').innerText = "運作中";
-            document.getElementById('btn-start').style.background = "#00ffcc";
-        } catch(e) { alert("啟動失敗: "+e.message); }
+            document.getElementById('btn-start').style.background = "#55ff55";
+        } catch(e) { alert("啟動失敗: " + e.message); }
     };
-
-    // UI 記憶
-    ['p-x', 'p-y', 'p-scale', 'p-wind'].forEach(id => {
-        if(localStorage.getItem(id)) document.getElementById(id).value = localStorage.getItem(id);
-        document.getElementById(id).addEventListener('input', e => localStorage.setItem(id, e.target.value));
-    });
 
     window.onload = loadAll;
 </script>
