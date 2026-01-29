@@ -3,135 +3,394 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber V9.2 Depth Pro</title>
+    <title>Ski-VTuber V10.0 Physics Engine</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: transparent; font-family: sans-serif; }
-        #container { position: relative; width: 100vw; height: 100vh; }
-
-        /* V皮總成 (呼吸律動) */
-        #avatar-root {
-            position: absolute; bottom: 0; right: 0; width: 45vw; height: auto;
-            pointer-events: none;
-            /* 讓身體、後領一起呼吸 */
-            animation: breathe 3s ease-in-out infinite;
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: monospace; }
+        
+        /* 畫布全螢幕，利用 GPU 加速 */
+        canvas { 
+            display: block; 
+            width: 100vw; 
+            height: 100vh;
+            touch-action: none;
         }
 
-        .layer { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; transform-origin: top center; }
-
-        /* --- 關鍵：前後層級 (Z-Index) --- */
-        /* 數字越小越後面 */
+        /* UI 面板 */
+        #ui {
+            position: absolute; top: 10px; left: 10px; 
+            background: rgba(0, 0, 0, 0.8); color: #00ffcc; 
+            padding: 15px; border-radius: 8px; border: 1px solid #00ffcc;
+            width: 280px; z-index: 100;
+        }
         
-        .z-0  { z-index: 5; }   /* 最底層 (如果有背景光環之類) */
-        .z-10 { z-index: 10; }  /* 身體 (Body) */
-        .z-15 { z-index: 15; }  /* ★ 關鍵：頭後面的外套/領子 (Jacket Back) */
-        .z-20 { z-index: 20; }  /* 頭部主體 (Head) */
-        .z-21 { z-index: 21; }  /* 五官 (Face Parts) */
-        .z-30 { z-index: 30; }  /* 前髮 (Front Hair) */
-        .z-40 { z-index: 40; }  /* 呆毛/最頂層 */
-
-        /* --- 物理動態 --- */
-        /* 頭部獨立擺動 (才不會跟身體黏死) */
-        .head-sway { animation: head-move 4s ease-in-out infinite; transform-origin: center 80%; }
-        
-        /* 輕微的風 */
-        .wind-light { animation: flutter 0.5s ease-in-out infinite alternate; }
-        .wind-mid   { animation: sway 1.5s ease-in-out infinite alternate; }
-        .delay-1 { animation-delay: 0.2s; }
-        .delay-2 { animation-delay: 0.5s; }
-
-        @keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.015)} }
-        @keyframes head-move { 0%,100%{transform:rotate(0deg)} 50%{transform:rotate(1.5deg)} }
-        @keyframes flutter { 0%{transform:skewX(1deg)} 100%{transform:skewX(3deg)} }
-        @keyframes sway    { 0%{transform:skewX(-1deg)} 100%{transform:skewX(2deg)} }
-
-        #ui { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 8px; z-index: 100; font-size: 12px; }
-        .hidden { display: none; }
+        .control-group { margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        label { display: block; font-size: 12px; color: #aaa; }
+        input[type=range] { width: 100%; accent-color: #00ffcc; }
+        button { 
+            background: #00ffcc; color: black; border: none; 
+            padding: 8px 12px; border-radius: 4px; font-weight: bold; 
+            cursor: pointer; width: 100%; margin-top: 5px;
+        }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<div id="container">
-    <div id="avatar-root">
-        
-        <!-- [層級 1] 身體主體 -->
-        <img id="body" class="layer z-10" src="body.png">
+<!-- 核心畫布：所有畫面都由 JavaScript 繪製 -->
+<canvas id="live2d-canvas"></canvas>
 
-        <!-- [層級 2] ★ 關鍵：頭後面的外套/後領 (補在這裡！) -->
-        <!-- 這張圖會蓋住身體，但在頭的後面 -->
-        <img id="jacket_back" class="layer z-15" src="jacket_back.png">
-
-        <!-- [層級 3] 頭部群組 (包含頭、五官、耳朵) -->
-        <!-- 加上 head-sway 讓頭跟領子有相對運動 -->
-        <div class="layer z-20 head-sway" style="width:100%; height:100%;">
-            
-            <img id="head" class="layer" src="head.png">
-            <img id="ears" class="layer" src="ears.png" style="animation: flutter 2s infinite;">
-
-            <!-- 表情 -->
-            <img id="mouth_closed" class="layer z-21" src="mouth_closed.png">
-            <img id="mouth_open"   class="layer z-21" src="mouth_open.png" style="opacity:0;">
-            <img id="eyes_open"    class="layer z-21" src="eyes_open.png">
-            <img id="eyes_closed"  class="layer z-21" src="eyes_closed.png" style="opacity:0;">
-
-            <!-- [層級 4] 頭髮 (在臉的前面) -->
-            <!-- 把你那十幾層頭髮放在這裡面 -->
-            <img id="hair_1" class="layer z-30 wind-mid" src="hair_1.png">
-            <img id="hair_2" class="layer z-30 wind-light delay-1" src="hair_2.png">
-            <img id="hair_3" class="layer z-30 wind-mid delay-2" src="hair_3.png">
-            <!-- 繼續加你的 hair_x.png ... -->
-
-        </div>
+<!-- 控制面板 -->
+<div id="ui">
+    <div style="text-align:center; font-weight:bold; margin-bottom:10px;">V10.0 真·物理引擎版</div>
+    
+    <div class="control-group">
+        <label>全域風力 (Wind Force)</label>
+        <input type="range" id="param-wind" min="-10" max="10" step="0.1" value="2">
+    </div>
+    
+    <div class="control-group">
+        <label>物理重力 (Gravity/Stiffness)</label>
+        <input type="range" id="param-gravity" min="0.1" max="2.0" step="0.1" value="0.8">
     </div>
 
-    <div id="ui">
-        <b>V9.2 深度防穿模版</b><br>
-        <button onclick="initAudio()">啟動同步</button>
-        <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#f55;">隱藏</button>
+    <div class="control-group">
+        <label>位置 X / Y / 縮放</label>
+        <input type="range" id="pos-x" min="-100" max="100" value="0">
+        <input type="range" id="pos-y" min="-100" max="100" value="0">
+        <input type="range" id="scale" min="0.5" max="2.0" step="0.1" value="1.0">
     </div>
+
+    <button id="btn-start">啟動系統 (麥克風 + 物理)</button>
+    <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#444; color:white; margin-top:5px;">隱藏介面</button>
+    <div id="status" style="font-size:10px; color:white; margin-top:5px;">等待啟動...</div>
 </div>
 
 <script>
-    const mouthClosed = document.getElementById('mouth_closed');
-    const mouthOpen = document.getElementById('mouth_open');
-    const eyesOpen = document.getElementById('eyes_open');
-    const eyesClosed = document.getElementById('eyes_closed');
-    let talkTimeout;
+    // --- 1. 物理引擎核心 (Physics Kernel) ---
+    // 這是模仿 Live2D Cubism 的彈簧系統 logic
+    
+    class PhysicsObject {
+        constructor(name, type) {
+            this.name = name;
+            this.type = type; // 'L'=Light, 'M'=Mid, 'H'=Heavy, 'Static'=不動
+            
+            // 物理狀態
+            this.angle = 0;       // 當前角度
+            this.velocity = 0;    // 當前速度
+            this.acceleration = 0;// 當前加速度
 
-    function setTalking(isTalking) {
-        mouthClosed.style.opacity = isTalking ? 0 : 1;
-        mouthOpen.style.opacity = isTalking ? 1 : 0;
+            // 物理材質參數 (預設值，稍後會根據 type 自動調整)
+            this.mass = 1.0;      // 質量 (越重越難動，慣性越大)
+            this.stiffness = 0.1; // 硬度/彈性 (越大回彈越快)
+            this.damping = 0.9;   // 阻力 (空氣阻力，越小停越慢)
+            this.windFactor = 1.0;// 受風面積 (越輕的頭髮受風越大)
+            
+            this.applyMaterial();
+        }
+
+        applyMaterial() {
+            // 根據你的分類自動賦予物理屬性
+            if (this.type === 'L') { // 輕碎髮：很輕，受風大，回彈快
+                this.mass = 0.8;
+                this.stiffness = 0.15;
+                this.damping = 0.92;
+                this.windFactor = 1.5;
+            } 
+            else if (this.type === 'M') { // 一般瀏海
+                this.mass = 1.2;
+                this.stiffness = 0.1;
+                this.damping = 0.9;
+                this.windFactor = 1.0;
+            } 
+            else if (this.type === 'H') { // 厚重後髮：很重，慣性大，動得慢
+                this.mass = 2.0;
+                this.stiffness = 0.05;
+                this.damping = 0.85;
+                this.windFactor = 0.6;
+            }
+        }
+
+        update(globalWind, headMovement) {
+            if (this.type === 'Static') return;
+
+            // 物理公式：牛頓第二運動定律 + 虎克定律 (F = ma, F = -kx)
+            // 總力 = 風力 + 頭部慣性力 - 彈簧拉力(想回正) - 阻力
+            
+            let force = (globalWind * this.windFactor) 
+                      + (headMovement * this.mass) 
+                      - (this.angle * this.stiffness) 
+                      - (this.velocity * this.damping); // 阻力與速度相反
+
+            this.acceleration = force / this.mass;
+            this.velocity += this.acceleration;
+            this.angle += this.velocity;
+        }
+    }
+// --- 2. 圖像資源配置 (Asset Configuration) ---
+    // 這裡列出你所有的圖層，程式會自動分類
+    const layerConfig = [
+        // [後層]
+        { src: 'jacket_back.png', type: 'Static', z: 5 },
+        
+        // [身體]
+        { src: 'body.png', type: 'Body', z: 10 }, 
+        
+        // [頭部群組] (type='Head' 會跟著頭一起擺動)
+        { src: 'head.png', type: 'Head', z: 20 },
+        { src: 'ears.png', type: 'Head', z: 21 }, // 耳朵跟著頭
+        
+        // [表情] (全部跟著頭動)
+        { src: 'mouth_close.png', id: 'm_close', type: 'Head', z: 22 },
+        { src: 'mouth_open.png',  id: 'm_open',  type: 'Head', z: 22, visible: false },
+        { src: 'eyes_open.png',   id: 'e_open',  type: 'Head', z: 23 },
+        { src: 'eyes_closed.png', id: 'e_closed', type: 'Head', z: 23, visible: false },
+
+        // [頭髮物理層] (根據檔名自動判斷 L/M/H)
+        { src: 'hair_base.png', type: 'H', z: 25 }, // 底層頭髮最重
+        
+        // 重頭髮 (Heavy)
+        { src: 'hair_H1.png', type: 'H', z: 26 },
+        { src: 'hair_H2.png', type: 'H', z: 26 },
+        
+        // 中頭髮 (Mid)
+        { src: 'hair_M1.png', type: 'M', z: 27 },
+        { src: 'hair_M2.png', type: 'M', z: 27 },
+        { src: 'hair_M3.png', type: 'M', z: 27 },
+
+        // 輕頭髮 (Light)
+        { src: 'hair_L1.png', type: 'L', z: 28 },
+        { src: 'hair_L2.png', type: 'L', z: 28 },
+        { src: 'hair_L3.png', type: 'L', z: 28 },
+
+        // 前瀏海 (Front) - 視為輕或中
+        { src: 'layer-front1.png', type: 'L', z: 29 },
+        { src: 'layer-front2.png', type: 'L', z: 29 }
+    ];
+
+    // --- 3. 系統變數 ---
+    const canvas = document.getElementById('live2d-canvas');
+    const ctx = canvas.getContext('2d');
+    const video = document.createElement('video'); // 隱藏的 video 元素
+    video.autoplay = true; video.muted = true; video.playsInline = true;
+
+    const layers = []; // 存放載入後的物件
+    let globalTime = 0;
+    
+    // UI 參數綁定
+    const paramWind = document.getElementById('param-wind');
+    const paramPosX = document.getElementById('pos-x');
+    const paramPosY = document.getElementById('pos-y');
+    const paramScale = document.getElementById('scale');
+
+    // --- 4. 資源載入器 (Loader) ---
+    async function loadResources() {
+        document.getElementById('status').innerText = "載入圖片資源中...";
+        
+        const promises = layerConfig.map(cfg => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = cfg.src;
+                img.onload = () => {
+                    // 建立物理物件
+                    const physicsObj = new PhysicsObject(cfg.src, cfg.type);
+                    // 綁定圖片數據
+                    physicsObj.img = img;
+                    physicsObj.z = cfg.z;
+                    physicsObj.id = cfg.id || null;
+                    physicsObj.visible = (cfg.visible !== undefined) ? cfg.visible : true;
+                    // 加入列表
+                    layers.push(physicsObj);
+                    resolve(true);
+                };
+                img.onerror = () => {
+                    console.warn("缺圖 (已忽略): " + cfg.src);
+                    resolve(false); // 缺圖不報錯，直接忽略
+                };
+            });
+        });
+
+        await Promise.all(promises);
+        // 依照 Z 軸排序，確保前後順序正確
+        layers.sort((a, b) => a.z - b.z);
+        document.getElementById('status').innerText = "系統就緒，請按啟動";
     }
 
-    function blink() {
-        eyesOpen.style.opacity = 0; eyesClosed.style.opacity = 1;
+    // --- 5. 主渲染迴圈 (Main Loop) ---
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. 繪製相機背景 (保持比例填滿)
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+            const x = (canvas.width - video.videoWidth * scale) / 2;
+            const y = (canvas.height - video.videoHeight * scale) / 2;
+            ctx.drawImage(video, x, y, video.videoWidth * scale, video.videoHeight * scale);
+        }
+
+        // 2. 計算全域物理力 (Global Physics)
+        globalTime += 0.05;
+        // 產生自然風：基礎風力 + 正弦波擾動 (模擬陣風)
+        const baseWind = parseFloat(paramWind.value);
+        const naturalGust = Math.sin(globalTime) * 0.5 + Math.sin(globalTime * 0.3) * 0.3;
+        const currentWind = baseWind + naturalGust;
+
+        // 產生頭部/身體的呼吸律動 (Idle Motion)
+        const bodyBreath = Math.sin(globalTime * 0.5) * 0.005; // 身體上下縮放
+        const headSway = Math.sin(globalTime * 0.8) * 0.02;    // 頭部左右輕擺
+
+        // 3. 繪製 V 皮圖層
+        // 計算 V 皮的統一位置
+        const avatarScale = parseFloat(paramScale.value);
+        // 讓 V 皮對準底部中央
+        const centerX = canvas.width / 2 + parseFloat(paramPosX.value) * 5; 
+        const bottomY = canvas.height + parseFloat(paramPosY.value) * 5;
+
+        layers.forEach(obj => {
+            if (!obj.visible) return;
+
+            // 更新物理計算
+            // 如果是頭髮(L/M/H)，受到風力 + 頭部擺動慣性的影響
+            if (['L', 'M', 'H'].includes(obj.type)) {
+                obj.update(currentWind, headSway * 5); // 頭動越快，頭髮甩越大力
+            } else if (obj.type === 'Head') {
+                obj.angle = headSway; // 頭部直接跟隨律動
+            }
+
+            // 繪圖變換 (Transform)
+            ctx.save();
+            
+            // 移到繪製中心 (底部中點)
+            ctx.translate(centerX, bottomY);
+            ctx.scale(avatarScale, avatarScale);
+
+            // 應用呼吸 (Body & Jacket)
+            if (obj.type === 'Body' || obj.type === 'Static') {
+                ctx.scale(1, 1 + bodyBreath);
+            }
+
+            // 應用物理旋轉
+            // 關鍵：頭髮的旋轉支點設定在圖片頂部 (圖片高度的 0%)
+            // 這樣髮根不動，髮尾甩動
+            const imgW = obj.img.width;
+            const imgH = obj.img.height;
+            
+            // 將座標系移到圖片頂部中心
+            // 假設圖片是為了放在畫面底部設計的，我們稍微往上移一點作為旋轉點
+            ctx.translate(0, -imgH); 
+            ctx.rotate(obj.angle); 
+            ctx.translate(0, imgH); // 轉完移回來
+
+            // 畫圖 (居中繪製)
+            // 這裡假設你的 PNG 已經是對齊好的 (畫布大小一樣)
+            ctx.drawImage(obj.img, -imgW / 2, -imgH, imgW, imgH);
+
+            ctx.restore();
+        });
+
+        requestAnimationFrame(animate);
+    }
+
+    // --- 6. 互動與啟動控制 ---
+    // 表情切換
+    function setFace(part, state) {
+        const targetOpen = layers.find(l => l.id === (part === 'mouth' ? 'm_open' : 'e_open'));
+        const targetClose = layers.find(l => l.id === (part === 'mouth' ? 'm_close' : 'e_closed'));
+        if (targetOpen && targetClose) {
+            targetOpen.visible = state;
+            targetClose.visible = !state;
+        }
+    }
+
+    // 眨眼邏輯
+    function startBlinkLoop() {
         setTimeout(() => {
-            eyesOpen.style.opacity = 1; eyesClosed.style.opacity = 0;
-            setTimeout(blink, Math.random() * 3000 + 2000);
-        }, 150);
+            setFace('eyes', false); // 閉眼
+            setTimeout(() => {
+                setFace('eyes', true); // 張眼
+                startBlinkLoop();
+            }, 150);
+        }, Math.random() * 3000 + 2000);
     }
-    blink();
 
-    async function initAudio() {
+    // 啟動按鈕
+    document.getElementById('btn-start').onclick = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // 1. 啟動相機
+            const vStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            video.srcObject = vStream;
+
+            // 2. 啟動麥克風
+            const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const audioCtx = new AudioContext();
             const analyser = audioCtx.createAnalyser();
-            const source = audioCtx.createMediaStreamSource(stream);
+            const src = audioCtx.createMediaStreamSource(aStream);
             const script = audioCtx.createScriptProcessor(2048, 1, 1);
-            source.connect(analyser); analyser.connect(script); script.connect(audioCtx.destination);
+            src.connect(analyser); analyser.connect(script); script.connect(audioCtx.destination);
+            
             script.onaudioprocess = () => {
                 const data = new Uint8Array(analyser.frequencyBinCount);
                 analyser.getByteFrequencyData(data);
-                if ((data.reduce((a,b)=>a+b)/data.length) > 20) {
-                    setTalking(true); clearTimeout(talkTimeout);
-                    talkTimeout = setTimeout(() => setTalking(false), 150);
+                const vol = data.reduce((a,b)=>a+b)/data.length;
+                // 說話閥值
+                if (vol > 25) {
+                    setFace('mouth', true);
+                    clearTimeout(window.talkTimer);
+                    window.talkTimer = setTimeout(() => setFace('mouth', false), 150);
                 }
             };
-            document.querySelector('button').innerText = "監聽中...";
-        } catch(e) {}
-    }
-    document.body.ondblclick = () => document.getElementById('ui').classList.toggle('hidden');
-</script>
 
+            // 3. 啟動迴圈
+            startBlinkLoop();
+            animate();
+            
+            document.getElementById('btn-start').innerText = "系統運行中";
+            document.getElementById('btn-start').style.background = "#55ff55";
+        } catch (e) {
+            alert("啟動失敗: " + e.message);
+        }
+    };
+
+    // 初始化載入
+    window.onload = () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        loadResources();
+    };
+    // --- 7. 物理進階優化 (Advanced Physics Polish) ---
+    // 增加一個隨機衝力函數，模擬滑雪下坡時的「速度衝擊」
+    function applyWindImpulse() {
+        if (!layers.length) return;
+        
+        // 隨機產生一個 1~3 秒的強風脈衝
+        const impulse = (Math.random() - 0.5) * 5;
+        layers.forEach(obj => {
+            if (['L', 'M', 'H'].includes(obj.type)) {
+                // 輕的頭髮受衝擊影響較大
+                obj.velocity += impulse * obj.windFactor;
+            }
+        });
+        
+        // 隨機時間後再次觸發
+        setTimeout(applyWindImpulse, Math.random() * 5000 + 2000);
+    }
+
+    // 啟動衝力系統
+    applyWindImpulse();
+
+    // 偵測是否為行動裝置，優化 Canvas 畫質
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas() {
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        ctx.scale(dpr, dpr);
+    }
+    setupCanvas();
+
+    // 視窗大小改變時重新適應
+    window.onresize = setupCanvas;
+
+    console.log("V10.0 真·物理引擎載入完成。祝滑雪直播順利！");
+
+</script>
 </body>
 </html>
