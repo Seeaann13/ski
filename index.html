@@ -3,41 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber V10.4 Ultimate</title>
+    <title>Ski-VTuber V10.5 iOS Fix</title>
     <style>
-        /* 基礎設定：防誤觸、全黑背景 */
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; }
-        canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; user-select: none; -webkit-user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
         
-        /* UI 面板優化：毛玻璃效果、清晰字體 */
         #ui {
             position: absolute; top: 10px; left: 10px; width: 260px; z-index: 100;
-            background: rgba(20, 20, 20, 0.85); color: #e0e0e0; padding: 16px; 
-            border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-            transition: opacity 0.3s;
+            background: rgba(20, 20, 20, 0.9); color: #fff; padding: 15px; 
+            border-radius: 16px; border: 1px solid rgba(255,255,255,0.2);
+            font-size: 13px;
         }
         
-        /* 拉桿與標籤樣式 */
-        .control-group { margin-bottom: 12px; }
-        label { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-bottom: 4px; }
-        input[type=range] { width: 100%; height: 4px; background: #444; border-radius: 2px; accent-color: #00d2ff; outline: none; }
+        input[type=range] { width: 100%; margin: 8px 0; accent-color: #00d2ff; }
+        label { color: #aaa; font-size: 11px; display: flex; justify-content: space-between; }
         
-        /* 按鈕樣式 */
         button { 
-            background: linear-gradient(135deg, #00d2ff, #007aff); color: #fff; 
-            border: none; padding: 12px; width: 100%; border-radius: 8px; 
-            font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 10px;
-            box-shadow: 0 4px 12px rgba(0, 210, 255, 0.3);
+            background: #00d2ff; color: #000; border: none; padding: 12px; 
+            width: 100%; border-radius: 8px; font-weight: 800; margin-top: 10px;
         }
-        button:active { transform: scale(0.98); }
         
-        /* 音量條 */
-        #audio-meter { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 10px; overflow: hidden; }
-        #audio-level { width: 0%; height: 100%; background: #55ff55; transition: width 0.1s; }
-
-        .hidden { opacity: 0; pointer-events: none; }
+        #audio-meter { width: 100%; height: 5px; background: #444; margin-top: 5px; border-radius: 3px; }
+        #audio-level { width: 0%; height: 100%; background: #00ff00; transition: width 0.1s; }
+        
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -45,40 +34,28 @@
 <canvas id="vtuber-canvas"></canvas>
 
 <div id="ui">
-    <div style="text-align:center; font-weight:800; font-size:16px; color:#fff; margin-bottom:15px; letter-spacing:1px;">SKI-VTUBER V10.4</div>
+    <div style="text-align:center; font-weight:900; margin-bottom:10px; color:#00d2ff;">V10.5 iOS 修復版</div>
     
-    <div class="control-group">
-        <label>位置 X (左右) <span id="val-x">0</span></label>
-        <input type="range" id="p-x" min="-300" max="300" value="0">
-    </div>
-    
-    <div class="control-group">
-        <label>位置 Y (上下) <span id="val-y">100</span></label>
-        <input type="range" id="p-y" min="-200" max="500" value="100">
-    </div>
+    <label>位置 X (左右)</label><input type="range" id="p-x" min="-300" max="300" value="0">
+    <label>位置 Y (上下)</label><input type="range" id="p-y" min="-200" max="500" value="100">
+    <label>縮放 (Scale)</label><input type="range" id="p-scale" min="0.2" max="2.5" step="0.01" value="0.85">
+    <label>風力 (Wind)</label><input type="range" id="p-wind" min="0" max="10" step="0.1" value="2.0">
 
-    <div class="control-group">
-        <label>縮放 (Scale) <span id="val-scale">0.85</span></label>
-        <input type="range" id="p-scale" min="0.2" max="2.5" step="0.01" value="0.85">
-    </div>
-
-    <div class="control-group">
-        <label>風力 (Wind) <span id="val-wind">2.0</span></label>
-        <input type="range" id="p-wind" min="0" max="10" step="0.1" value="2.0">
-    </div>
-
-    <!-- 音量監測 -->
-    <label>麥克風訊號:</label>
+    <label>音量訊號:</label>
     <div id="audio-meter"><div id="audio-level"></div></div>
 
     <button id="btn-start">啟動系統 (Start)</button>
-    <button onclick="toggleUI()" style="background:#333; box-shadow:none; margin-top:8px; font-size:12px; color:#aaa;">隱藏介面 (雙擊畫面喚醒)</button>
-    
-    <div id="status" style="text-align:center; font-size:10px; color:#666; margin-top:10px;">系統準備就緒</div>
+    <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#444; color:#fff; margin-top:5px;">隱藏介面</button>
+    <div id="status" style="text-align:center; font-size:10px; color:#666; margin-top:5px;">準備就緒</div>
 </div>
 
 <script>
-    // --- 1. 物理核心 (Physics Core) ---
+    // --- 全域變數 (解決找不到變數的問題) ---
+    let audioCtx, analyser, microphone;
+    let layers = [];
+    let globalTime = 0;
+    
+    // --- 1. 物理核心 ---
     class PhysicsLayer {
         constructor(cfg) {
             this.name = cfg.n;
@@ -88,46 +65,27 @@
             this.visible = (cfg.v !== undefined) ? cfg.v : true;
             this.img = null;
 
-            // 物理狀態
             this.angle = 0;
             this.velocity = 0;
 
-            // 材質參數 (質量, 硬度, 阻尼)
-            this.mass = 1.0; this.stiffness = 0.08; this.damping = 0.92;
+            // 物理參數 (頭髮越重，stiffness 越小，擺動越慢)
+            this.mass = 1.0; this.stiffness = 0.08; this.damping = 0.90;
 
-            // 自動材質判定
-            if (this.name.includes('_L')) { // 輕
-                this.mass = 0.6; this.stiffness = 0.12; this.damping = 0.94;
-            } else if (this.name.includes('_H')) { // 重
-                this.mass = 3.0; this.stiffness = 0.04; this.damping = 0.88;
-            } else if (this.name.includes('front')) { // 瀏海
-                this.mass = 0.8; this.stiffness = 0.1; this.damping = 0.92;
-            }
+            if (this.name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.12; }
+            if (this.name.includes('_H')) { this.mass = 3.0; this.stiffness = 0.03; this.damping = 0.85; }
         }
 
         update(windForce, headAngle) {
             if (this.type === 'static') return;
-
-            // 如果是五官，直接鎖死在頭上，避免抖動
-            if (this.type === 'face') {
-                this.angle = headAngle;
+            if (this.type === 'face' || this.type === 'head') {
+                this.angle = headAngle; // 五官和頭完全同步
                 return;
             }
 
-            // 如果是頭部，只做呼吸擺動
-            if (this.type === 'head') {
-                this.angle = headAngle;
-                return;
-            }
-
-            // --- 頭髮物理運算 ---
-            // 1. 風力限制 (Clamp)：防止風太大把頭髮吹斷
-            let safeWind = Math.max(-1.0, Math.min(1.0, windForce * (2 - this.mass * 0.4)));
+            // 頭髮物理
+            let safeWind = Math.max(-0.5, Math.min(0.5, windForce * (2 - this.mass * 0.4))); // 限制風力避免頭髮飛走
+            let targetAngle = safeWind + (headAngle * this.mass * 0.5);
             
-            // 2. 目標角度：風力 + 慣性 (頭往左轉，頭髮往右甩)
-            let targetAngle = safeWind + (headAngle * this.mass * 0.6);
-
-            // 3. 彈簧公式
             const force = (targetAngle - this.angle) * this.stiffness;
             const acceleration = force / this.mass;
             this.velocity = (this.velocity + acceleration) * this.damping;
@@ -135,49 +93,22 @@
         }
     }
 
-    // --- 2. 系統變數 ---
+    // --- 2. 系統初始化 ---
     const canvas = document.getElementById('vtuber-canvas');
     const ctx = canvas.getContext('2d');
     const video = document.createElement('video');
     video.autoplay = true; video.muted = true; video.playsInline = true;
-    
-    let layers = [];
-    let globalTime = 0;
-    
-    // 儲存設定 (Local Storage)
-    const settings = {
-        x: localStorage.getItem('ski_x') || 0,
-        y: localStorage.getItem('ski_y') || 100,
-        scale: localStorage.getItem('ski_scale') || 0.85,
-        wind: localStorage.getItem('ski_wind') || 2.0
-    };
 
-    // 初始化 UI 數值
-    document.getElementById('p-x').value = settings.x;
-    document.getElementById('p-y').value = settings.y;
-    document.getElementById('p-scale').value = settings.scale;
-    document.getElementById('p-wind').value = settings.wind;
-    updateLabels();
-
-    // --- 3. 檔案清單 (三明治結構：後領 -> 頭 -> 身體 -> 五官 -> 頭髮) ---
+    // --- 3. 檔案清單 ---
     const fileList = [
-        // 1. 最底層：後領
         {n:'jacket_back.png', t:'static', z:5},
-        
-        // 2. 頭部 (脖子)：放在身體後面
-        {n:'head.png',        t:'head',   z:10},
-
-        // 3. 身體 (前領)：蓋住脖子
-        {n:'body.png',        t:'static', z:15},
-        
-        // 4. 五官：跟隨頭部
+        {n:'body.png',        t:'static', z:10},
+        {n:'head.png',        t:'head',   z:15}, // 頭在身體後面(避免斷脖子)
         {n:'ears.png',        t:'face',   z:20},
         {n:'mouth_close.png', t:'face',   z:21, id:'m_close'},
         {n:'mouth_open.png',  t:'face',   z:21, id:'m_open', v:false},
         {n:'eyes_open.png',   t:'face',   z:22, id:'e_open'},
         {n:'eyes_closed.png', t:'face',   z:22, id:'e_closed', v:false},
-        
-        // 5. 頭髮：最上層
         {n:'hair_base.png',   t:'hair',   z:30},
         {n:'hair_H1.png',     t:'hair',   z:31},
         {n:'hair_H2.png',     t:'hair',   z:31},
@@ -188,39 +119,30 @@
         {n:'layer-front2.png',t:'hair',   z:35}
     ];
 
-    // --- 4. 資源載入 ---
     async function loadAll() {
-        const status = document.getElementById('status');
-        let loadedCount = 0;
-        
-        const promises = fileList.map(cfg => {
-            return new Promise(resolve => {
-                const img = new Image();
-                img.src = cfg.n;
+        let loaded = 0;
+        for (let f of fileList) {
+            const img = new Image();
+            img.src = f.n;
+            await new Promise(resolve => {
                 img.onload = () => {
-                    const l = new PhysicsLayer(cfg);
+                    const l = new PhysicsLayer(f);
                     l.img = img;
                     layers.push(l);
-                    loadedCount++;
-                    status.innerText = `載入資源: ${Math.floor(loadedCount/fileList.length*100)}%`;
+                    loaded++;
+                    document.getElementById('status').innerText = `載入: ${Math.floor(loaded/fileList.length*100)}%`;
                     resolve();
                 };
-                img.onerror = () => {
-                    console.log('缺圖跳過:', cfg.n); // 缺圖不報錯
-                    resolve();
-                };
+                img.onerror = () => resolve();
             });
-        });
-
-        await Promise.all(promises);
-        layers.sort((a,b) => a.z - b.z); // 依照 Z 軸排序
-        status.innerText = "資源就緒";
-        draw(); 
+        }
+        layers.sort((a,b) => a.z - b.z);
+        document.getElementById('status').innerText = "資源載入完成";
+        draw();
     }
 
-    // --- 5. 繪圖迴圈 ---
+    // --- 4. 繪圖核心 ---
     function draw() {
-        // iPad Retina 優化
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr;
         canvas.height = window.innerHeight * dpr;
@@ -238,18 +160,14 @@
 
         // 物理更新
         globalTime += 0.05;
-        const windBase = parseFloat(document.getElementById('p-wind').value) * 0.03;
-        // 風力 = 基礎 + 隨機陣風
-        const wind = windBase + (Math.sin(globalTime * 0.7) * 0.01) + (Math.cos(globalTime * 2.5) * 0.005);
-        // 頭部呼吸
-        const headAngle = Math.sin(globalTime * 0.5) * 0.025;
+        const windBase = parseFloat(document.getElementById('p-wind').value) * 0.02;
+        const wind = windBase + Math.sin(globalTime * 0.8) * 0.01;
+        const headAngle = Math.sin(globalTime * 0.5) * 0.02;
 
-        // 讀取 UI 數值
         const scale = parseFloat(document.getElementById('p-scale').value);
         const offX = parseFloat(document.getElementById('p-x').value);
         const offY = parseFloat(document.getElementById('p-y').value);
 
-        // 繪製圖層
         layers.forEach(l => {
             if (!l.visible || !l.img) return;
             l.update(wind, headAngle);
@@ -258,23 +176,41 @@
             ctx.translate(w / 2 + offX, h + offY);
             ctx.scale(scale, scale);
 
-            // 旋轉支點：設定在頭頂下方一點點 (脖子根部)
-            const pivotY = -l.img.height * 0.28; 
+            // ★ 頭髮歸位修正 ★
+            // 之前的支點設太高，導致頭髮旋轉時半徑過大而飛走
+            // 這裡將支點設為圖片中心偏上 (大約是頭頂位置)
+            const imgH = l.img.height;
+            const pivotY = -imgH * 0.65; // 從底部往上 65% 的位置作為旋轉中心
 
             if (l.type !== 'static') {
-                ctx.translate(0, pivotY);
-                ctx.rotate(l.angle);
+                ctx.translate(0, pivotY); 
+                ctx.rotate(l.angle);      
                 ctx.translate(0, -pivotY);
             }
 
-            ctx.drawImage(l.img, -l.img.width / 2, -l.img.height);
+            // 畫圖
+            ctx.drawImage(l.img, -l.img.width / 2, -imgH);
             ctx.restore();
         });
+
+        // 監聽音量條
+        if (analyser) {
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(data);
+            const vol = data.reduce((a,b)=>a+b) / data.length;
+            document.getElementById('audio-level').style.width = Math.min(100, vol * 2) + '%';
+            
+            if (vol > 20) {
+                toggleFace('mouth', true);
+                clearTimeout(window.talkT);
+                window.talkT = setTimeout(() => toggleFace('mouth', false), 150);
+            }
+        }
 
         requestAnimationFrame(draw);
     }
 
-    // --- 6. 互動與音訊 ---
+    // --- 5. 互動控制 ---
     function toggleFace(part, isOpen) {
         const openId = part === 'mouth' ? 'm_open' : 'e_open';
         const closeId = part === 'mouth' ? 'm_close' : 'e_closed';
@@ -291,65 +227,48 @@
         }, 150);
     }
 
-    // UI 事件監聽 & 自動存檔
-    ['p-x', 'p-y', 'p-scale', 'p-wind'].forEach(id => {
-        document.getElementById(id).addEventListener('input', (e) => {
-            updateLabels();
-            // 儲存設定到手機
-            localStorage.setItem('ski_' + id.split('-')[1], e.target.value);
-        });
-    });
-
-    function updateLabels() {
-        document.getElementById('val-x').innerText = document.getElementById('p-x').value;
-        document.getElementById('val-y').innerText = document.getElementById('p-y').value;
-        document.getElementById('val-scale').innerText = document.getElementById('p-scale').value;
-        document.getElementById('val-wind').innerText = document.getElementById('p-wind').value;
-    }
-
-    function toggleUI() {
-        const ui = document.getElementById('ui');
-        ui.classList.toggle('hidden');
-    }
-    
-    // 雙擊畫面顯示 UI
-    document.body.ondblclick = toggleUI;
-
+    // --- 6. 啟動按鈕 (iOS 修正) ---
     document.getElementById('btn-start').onclick = async () => {
         try {
+            // 1. 啟動相機
             const vStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             video.srcObject = vStream;
 
+            // 2. 啟動麥克風 (iOS 必須在點擊事件中建立 AudioContext)
             const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const ctx = new AudioContext();
-            const ana = ctx.createAnalyser();
-            const src = ctx.createMediaStreamSource(aStream);
-            const script = ctx.createScriptProcessor(2048, 1, 1);
             
-            src.connect(analyser); analyser.connect(script); script.connect(ctx.destination);
+            // 修正：支援 Safari 的 webkitAudioContext
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
             
-            script.onaudioprocess = () => {
-                const data = new Uint8Array(ana.frequencyBinCount);
-                ana.getByteFrequencyData(data);
-                const vol = data.reduce((a,b)=>a+b) / data.length;
-                
-                // 更新音量條
-                const meter = document.getElementById('audio-level');
-                meter.style.width = Math.min(100, vol * 2) + '%';
+            // 修正：iOS 必須手動 resume
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
 
-                if (vol > 20) {
-                    toggleFace('mouth', true);
-                    clearTimeout(window.talkT);
-                    window.talkT = setTimeout(() => toggleFace('mouth', false), 150);
-                }
-            };
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            microphone = audioCtx.createMediaStreamSource(aStream);
+            microphone.connect(analyser); // 只連接分析器，不輸出到喇叭(避免回音)
+
+            // 3. 啟動動畫
             autoBlink();
-            document.getElementById('btn-start').innerText = "系統運作中 (Running)";
+            document.getElementById('btn-start').innerText = "系統運作中";
             document.getElementById('btn-start').style.background = "#55ff55";
-        } catch(e) { alert("啟動失敗: " + e.message); }
+            
+        } catch(e) {
+            alert("啟動失敗: " + e.message);
+        }
     };
 
     window.onload = loadAll;
+
+    // UI 記憶功能
+    ['p-x', 'p-y', 'p-scale', 'p-wind'].forEach(id => {
+        const val = localStorage.getItem(id);
+        if (val) document.getElementById(id).value = val;
+        document.getElementById(id).addEventListener('input', (e) => localStorage.setItem(id, e.target.value));
+    });
 
 </script>
 </body>
