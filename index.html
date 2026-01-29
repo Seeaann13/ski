@@ -3,26 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ski-VTuber V10.3 Sandwich Fix</title>
+    <title>Ski-VTuber V11.0 Matcha Edition</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
         
         #ui {
             position: absolute; top: 10px; left: 10px; width: 260px; z-index: 100;
-            background: rgba(0, 0, 0, 0.9); color: #00d2ff; padding: 15px; 
-            border-radius: 12px; border: 1px solid #00d2ff; font-size: 13px;
+            background: rgba(0, 0, 0, 0.85); color: #00ffcc; padding: 15px; 
+            border-radius: 12px; border: 1px solid #00ffcc; font-size: 13px;
         }
-        
-        label { display: block; margin-top: 5px; color: #fff; font-size: 12px; }
-        input[type=range] { width: 100%; accent-color: #00d2ff; margin: 2px 0; }
-        .row { display: flex; gap: 5px; }
-        
-        button { 
-            background: #00d2ff; color: #000; border: none; padding: 10px; 
-            width: 100%; border-radius: 6px; font-weight: bold; margin-top: 10px;
-        }
+        input[type=range] { width: 100%; accent-color: #00ffcc; margin: 5px 0; }
+        button { background: #00ffcc; color: #000; border: none; padding: 10px; width: 100%; border-radius: 5px; font-weight: bold; margin-top: 10px; }
         .hidden { display: none !important; }
+        .bar-container { width: 100%; height: 10px; background: #333; margin-top: 5px; border-radius: 5px; overflow: hidden; }
+        #voice-bar { width: 0%; height: 100%; background: #00ffcc; transition: width 0.1s; }
     </style>
 </head>
 <body>
@@ -30,76 +25,75 @@
 <canvas id="vtuber-canvas"></canvas>
 
 <div id="ui">
-    <div style="text-align:center; font-weight:900; margin-bottom:5px;">V10.3 圖層修復版</div>
+    <div style="text-align:center; font-weight:900; margin-bottom:5px;">V11.0 抹茶聲紋版</div>
     
-    <label>1. 位置調整 (X / Y / 大小)</label>
-    <div class="row">
-        <input type="range" id="p-x" min="-200" max="200" value="0">
-        <input type="range" id="p-y" min="-200" max="300" value="100">
-    </div>
-    <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
+    <label>1. 聲音過濾 (抗風切):</label>
+    <div class="bar-container"><div id="voice-bar"></div></div>
+    <div style="font-size:10px; color:#aaa;">(綠條超過閥值才會張嘴)</div>
+    
+    <label>靈敏度 (Sensitivity):</label>
+    <input type="range" id="p-sens" min="1" max="100" value="50">
 
-    <label>2. 物理參數 (風力 / 限制)</label>
+    <label>2. 物理風力 (Wind):</label>
     <input type="range" id="p-wind" min="0" max="10" step="0.1" value="2.0">
     
-    <button id="btn-start">啟動系統</button>
-    <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#444; color:white;">隱藏</button>
-    <div id="status" style="color:#aaa; font-size:10px; text-align:center; margin-top:5px;">等待啟動...</div>
+    <label>3. 位置調整 (X / Y / Scale):</label>
+    <input type="range" id="p-x" min="-200" max="200" value="0">
+    <input type="range" id="p-y" min="-200" max="300" value="100">
+    <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
+
+    <button id="btn-start">啟動系統 (抗噪模式)</button>
+    <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:#444; color:white;">隱藏介面</button>
 </div>
 
 <script>
-    // --- 1. 物理核心 ---
+    // --- 1. 物理核心：改用 Skew (斜切) ---
     class PhysicsLayer {
         constructor(name, img, type, z) {
-            this.name = name;
-            this.img = img;
-            this.type = type; // static, head, face, hair
-            this.z = z;
+            this.name = name; this.img = img; this.type = type; this.z = z;
             
-            this.angle = 0;
+            // 物理狀態 (改為計算 skew 偏移量)
+            this.skew = 0;      // 斜切角度
+            this.offsetX = 0;   // 水平位移
             this.velocity = 0;
             this.visible = true;
             this.id = name.split('.')[0]; 
 
             // 物理材質
-            this.mass = 1.0; 
-            this.stiffness = 0.08; 
-            this.damping = 0.92;
+            this.mass = 1.0; this.stiffness = 0.1; this.damping = 0.85;
             
-            // 根據檔名分配材質
-            if (name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.12; }
-            if (name.includes('_H')) { this.mass = 3.0; this.stiffness = 0.03; this.damping = 0.90; }
+            // 根據你的分層邏輯設定材質
+            if (name.includes('_L')) { // 輕髮 (飄得快)
+                this.mass = 0.5; this.stiffness = 0.15; this.damping = 0.90;
+            }
+            if (name.includes('_H')) { // 重髮 (飄得慢)
+                this.mass = 3.0; this.stiffness = 0.05; this.damping = 0.80;
+            }
+            if (name.includes('front')) { // 瀏海 (靈動)
+                this.mass = 0.8; this.stiffness = 0.12; this.damping = 0.88;
+            }
         }
 
-        update(windForce, headAngle) {
-            // 靜態物體不動
+        update(windForce, headMovement) {
             if (this.type === 'static') return;
+            if (this.type === 'face') { this.offsetX = headMovement * 20; return; } // 五官跟著頭平移
+            if (this.type === 'head') { this.offsetX = headMovement * 20; return; } // 頭部平移
 
-            // ★ 關鍵修復：五官 (Face) 直接鎖死在頭上，不進行物理運算，消除抖動
-            if (this.type === 'face') {
-                this.angle = headAngle;
-                return;
-            }
+            // 頭髮物理：目標是風力 + 頭部慣性
+            // 使用 Skew (斜切) 來模擬飄動，而不是旋轉
+            let targetSkew = windForce * (1.5 - this.mass * 0.2);
+            
+            // 慣性：頭往左移，頭髮會因為慣性先往右歪
+            targetSkew -= headMovement * this.mass * 2;
 
-            // 頭部：只有呼吸擺動
-            if (this.type === 'head') {
-                this.angle = headAngle;
-                return;
-            }
-
-            // 頭髮：受風力 + 慣性影響
-            // 限制最大風力 (Clamp)，防止歪掉
-            let effectiveWind = windForce * (2 - this.mass*0.4);
-            if (effectiveWind > 0.8) effectiveWind = 0.8 + (effectiveWind - 0.8) * 0.1; // 軟限制
-
-            let targetAngle = effectiveWind;
-            // 慣性：頭往左，頭髮往右
-            targetAngle += (headAngle * this.mass * 0.8);
-
-            const force = (targetAngle - this.angle) * this.stiffness;
-            const acceleration = force / this.mass;
-            this.velocity = (this.velocity + acceleration) * this.damping;
-            this.angle += this.velocity;
+            // 彈簧公式
+            const force = (targetSkew - this.skew) * this.stiffness;
+            const acc = force / this.mass;
+            this.velocity = (this.velocity + acc) * this.damping;
+            this.skew += this.velocity;
+            
+            // 頭髮除了歪，還會稍微跟著頭移動 (根部跟隨)
+            this.offsetX = headMovement * 20; 
         }
     }
 
@@ -107,41 +101,29 @@
     const ctx = canvas.getContext('2d');
     const video = document.createElement('video');
     video.autoplay = true; video.muted = true; video.playsInline = true;
-    
-    const layers = [];
-    let globalTime = 0;
+    const layers = []; let globalTime = 0;
 
-    // --- 2. 檔案清單 (★ Z-Index 重新排序：三明治法) ---
+    // --- 2. 檔案清單 (依照你的截圖) ---
     const fileList = [
-        // 最底層：後領 (5)
         {n:'jacket_back.png', t:'static', z:5},
-        
-        // 身體 (20)：為了蓋住脖子，身體要在頭前面！
-        // 如果你的身體圖包含了後領，那上面的 jacket_back 可以拿掉
-        {n:'body.png',        t:'static', z:20},
-
-        // 頭部 (10)：脖子在身體後面
-        {n:'head.png',        t:'head',   z:10},
-        
-        // 五官 (25)：要在身體前面
-        {n:'ears.png',        t:'face',   z:25}, // 耳朵改為 face 類型，跟隨頭
-        {n:'mouth_close.png', t:'face',   z:26, id:'m_close'},
-        {n:'mouth_open.png',  t:'face',   z:26, id:'m_open', v:false},
-        {n:'eyes_open.png',   t:'face',   z:27, id:'e_open'},
-        {n:'eyes_closed.png', t:'face',   z:27, id:'e_closed', v:false},
-        
-        // 頭髮 (30+)：最上層
-        {n:'hair_base.png',   t:'hair',   z:30},
-        {n:'hair_H1.png',     t:'hair',   z:31},
-        {n:'hair_H2.png',     t:'hair',   z:31},
-        {n:'hair_M1.png',     t:'hair',   z:32},
-        {n:'hair_M2.png',     t:'hair',   z:32},
-        {n:'hair_L1.png',     t:'hair',   z:33},
-        {n:'layer-front1.png',t:'hair',   z:35},
-        {n:'layer-front2.png',t:'hair',   z:35}
+        {n:'body.png',        t:'static', z:10}, // 身體蓋住後領
+        {n:'head.png',        t:'head',   z:20}, // 頭在身體後面(脖子)
+        {n:'ears.png',        t:'head',   z:21}, 
+        {n:'mouth_close.png', t:'face',   z:22, id:'m_close'},
+        {n:'mouth_open.png',  t:'face',   z:22, id:'m_open', v:false},
+        {n:'eyes_open.png',   t:'face',   z:23, id:'e_open'},
+        {n:'eyes_closed.png', t:'face',   z:23, id:'e_closed', v:false},
+        {n:'hair_base.png',   t:'hair',   z:25},
+        {n:'hair_H1.png',     t:'hair',   z:26},
+        {n:'hair_H2.png',     t:'hair',   z:26},
+        {n:'hair_M1.png',     t:'hair',   z:27},
+        {n:'hair_M2.png',     t:'hair',   z:27},
+        {n:'hair_L1.png',     t:'hair',   z:28},
+        {n:'layer-front1.png',t:'hair',   z:30},
+        {n:'layer-front2.png',t:'hair',   z:30}
     ];
 
-    // --- 3. 繪圖核心 ---
+    // --- 3. 繪圖核心 (Skew 變形) ---
     function draw() {
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr;
@@ -149,120 +131,134 @@
         ctx.scale(dpr, dpr);
         const w = window.innerWidth;
         const h = window.innerHeight;
-
         ctx.clearRect(0,0,w,h);
 
-        // 畫相機
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            const s = Math.max(w / video.videoWidth, h / video.videoHeight);
-            ctx.drawImage(video, (w - video.videoWidth*s)/2, (h - video.videoHeight*s)/2, video.videoWidth*s, video.videoHeight*s);
+            const s = Math.max(w/video.videoWidth, h/video.videoHeight);
+            ctx.drawImage(video, (w-video.videoWidth*s)/2, (h-video.videoHeight*s)/2, video.videoWidth*s, video.videoHeight*s);
         }
 
-        // 物理計算
         globalTime += 0.05;
-        // 風力
         const windVal = parseFloat(document.getElementById('p-wind').value);
-        const wind = (windVal * 0.05) + (Math.sin(globalTime * 0.7) * 0.015);
-        // 頭部擺動 (呼吸 + 隨機)
-        const headAngle = Math.sin(globalTime * 0.5) * 0.03;
+        // 風力亂流
+        const wind = (windVal * 0.01) + (Math.sin(globalTime * 0.5) * 0.005) + (Math.sin(globalTime * 2.1) * 0.002);
+        // 頭部左右平移 (不再是旋轉)
+        const headMove = Math.sin(globalTime * 0.5) * 0.05; 
         
-        // UI 參數
         const scale = parseFloat(document.getElementById('p-scale').value);
         const offX = parseFloat(document.getElementById('p-x').value);
         const offY = parseFloat(document.getElementById('p-y').value);
 
-        // 繪製
         layers.forEach(l => {
             if (!l.visible) return;
-            
-            // 更新物理 (傳入頭部角度)
-            l.update(wind, headAngle);
+            l.update(wind, headMove);
 
             ctx.save();
-            ctx.translate(w / 2 + offX, h + offY);
+            // 移到中心
+            ctx.translate(w/2 + offX, h + offY);
             ctx.scale(scale, scale);
-            
-            // 旋轉支點：設定在頭部下方 (脖子根部)
-            // 這樣頭轉動時，脖子根部是不動的
-            const pivotY = -l.img.height * 0.25; // 大約是從底部往上 25% 的位置
-            
-            if (l.type !== 'static') {
-                ctx.translate(0, pivotY); 
-                ctx.rotate(l.angle);      
-                ctx.translate(0, -pivotY);
-            }
 
-            ctx.drawImage(l.img, -l.img.width / 2, -l.img.height);
+            // ★ 關鍵物理變形：使用 transform 矩陣做 Skew
+            // context.transform(hScale, vSkew, hSkew, vScale, hMove, vMove)
+            // 我們只動 hSkew (水平斜切) 和 hMove (水平位移)
+            
+            if (l.type === 'hair') {
+                // 頭髮：根據物理計算斜切 + 跟隨頭部平移
+                ctx.transform(1, 0, l.skew, 1, l.offsetX, 0);
+            } else if (l.type === 'head' || l.type === 'face') {
+                // 頭和臉：只平移，不斜切
+                ctx.translate(l.offsetX, 0);
+            }
+            
+            // 畫圖 (以底部中心為基準)
+            ctx.drawImage(l.img, -l.img.width/2, -l.img.height);
             ctx.restore();
         });
-
         requestAnimationFrame(draw);
     }
 
     // --- 4. 資源載入 ---
     async function loadAll() {
-        const status = document.getElementById('status');
         let loaded = 0;
         for (let f of fileList) {
-            await new Promise(resolve => {
-                const img = new Image();
-                img.src = f.n;
+            await new Promise(r => {
+                const img = new Image(); img.src = f.n;
                 img.onload = () => {
                     const l = new PhysicsLayer(f.n, img, f.t, f.z);
-                    if (f.id) l.id = f.id; 
-                    if (f.v !== undefined) l.visible = f.v;
-                    layers.push(l);
-                    loaded++;
-                    status.innerText = `載入: ${Math.round(loaded/fileList.length*100)}%`;
-                    resolve();
+                    if (f.id) l.id = f.id; if (f.v !== undefined) l.visible = f.v;
+                    layers.push(l); loaded++; r();
                 };
-                img.onerror = () => resolve(); 
+                img.onerror = () => { console.log("缺: "+f.n); r(); };
             });
         }
         layers.sort((a,b) => a.z - b.z);
-        status.innerText = "準備完成";
-        draw(); 
+        draw();
     }
 
-    // --- 5. 表情與啟動 ---
+    // --- 5. 表情 ---
     function toggleFace(part, isOpen) {
-        const openId = part === 'mouth' ? 'm_open' : 'e_open';
-        const closeId = part === 'mouth' ? 'm_close' : 'e_closed';
-        const openL = layers.find(l => l.id === openId);
-        const closeL = layers.find(l => l.id === closeId);
-        if (openL && closeL) { openL.visible = isOpen; closeL.visible = !isOpen; }
+        const openId = part==='mouth'?'m_open':'e_open';
+        const closeId = part==='mouth'?'m_close':'e_closed';
+        const o = layers.find(l=>l.id===openId);
+        const c = layers.find(l=>l.id===closeId);
+        if(o&&c){ o.visible=isOpen; c.visible=!isOpen; }
     }
-
     function autoBlink() {
         toggleFace('eyes', false);
         setTimeout(() => {
             toggleFace('eyes', true);
-            setTimeout(autoBlink, Math.random() * 3000 + 2000);
+            setTimeout(autoBlink, Math.random()*3000+2000);
         }, 150);
     }
 
+    // --- 6. 聲音頻譜分析 (抗風切核心) ---
     document.getElementById('btn-start').onclick = async () => {
         try {
             const vStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             video.srcObject = vStream;
             const aStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
             const ctx = new AudioContext();
             const ana = ctx.createAnalyser();
             const src = ctx.createMediaStreamSource(aStream);
             const script = ctx.createScriptProcessor(2048, 1, 1);
+            
+            // 設定 FFT 大小
+            ana.fftSize = 512; 
             src.connect(ana); ana.connect(script); script.connect(ctx.destination);
             
+            const voiceBar = document.getElementById('voice-bar');
+            const sensSlider = document.getElementById('p-sens');
+
             script.onaudioprocess = () => {
                 const data = new Uint8Array(ana.frequencyBinCount);
                 ana.getByteFrequencyData(data);
-                const vol = data.reduce((a,b)=>a+b) / data.length;
-                if (vol > 20) {
+                
+                // ★ 頻率過濾核心 ★
+                // 陣列索引 0~5 代表極低頻 (風聲、轟隆聲)，我們直接忽略
+                // 我們只計算索引 6 (約250Hz) 到 100 (約4000Hz) 的能量
+                let vocalEnergy = 0;
+                let count = 0;
+                for (let i = 6; i < 100; i++) {
+                    vocalEnergy += data[i];
+                    count++;
+                }
+                const avgVol = vocalEnergy / count;
+                
+                // 視覺化音量條
+                voiceBar.style.width = Math.min(avgVol * 2, 100) + "%";
+
+                // 觸發門檻 (Sensitivity)
+                const threshold = 105 - parseInt(sensSlider.value); // 數值越小越靈敏
+                
+                if (avgVol > threshold) {
                     toggleFace('mouth', true);
-                    clearTimeout(window.tT); window.tT = setTimeout(() => toggleFace('mouth', false), 150);
+                    clearTimeout(window.talkT);
+                    window.talkT = setTimeout(() => toggleFace('mouth', false), 150);
                 }
             };
             autoBlink();
-            document.getElementById('btn-start').innerText = "運作中";
+            document.getElementById('btn-start').innerText = "系統運作中";
             document.getElementById('btn-start').style.background = "#55ff55";
         } catch(e) { alert("啟動失敗: " + e.message); }
     };
