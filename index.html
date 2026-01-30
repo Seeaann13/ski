@@ -230,12 +230,39 @@
 
         requestAnimationFrame(draw);
     }
-// --- 模組 3: 雙軌 AI 語音偵測引擎 ---
+// --- 模組 3 (修正版): 資源載入器 ---
+    // (將 loadResources 獨立出來，確保任何地方都能呼叫)
+    async function loadResources() {
+        const status = document.getElementById('status');
+        let count = 0;
+        
+        for (let f of fileList) {
+            await new Promise(resolve => {
+                const img = new Image();
+                img.src = f.n;
+                img.onload = () => {
+                    const layer = new PhysicsLayer(f.n, img, f.t, f.z);
+                    if (f.id) layer.id = f.id;
+                    if (f.v !== undefined) layer.visible = f.v;
+                    layers.push(layer);
+                    count++;
+                    status.innerText = `載入中: ${Math.round(count/fileList.length*100)}%`;
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.warn("無法加載: " + f.n);
+                    resolve(); 
+                };
+            });
+        }
+        layers.sort((a, b) => a.z - b.z);
+        status.innerText = "資源載入完成，請點啟動";
+    }
 
+    // --- 模組 4 (修正版): 雙軌 AI 語音偵測引擎 ---
     let audioContext = null;
     let talkTimer = null;
 
-    // 表情控制函數 (通用)
     function setFace(part, isOpen) {
         const oId = part === 'mouth' ? 'm_open' : 'e_open';
         const cId = part === 'mouth' ? 'm_close' : 'e_closed';
@@ -244,21 +271,17 @@
         if (op && cl) { op.visible = isOpen; cl.visible = !isOpen; }
     }
 
-    // --- AI 模式 (主方案) ---
     async function startVAD() {
         try {
             const vFill = document.getElementById('v-meter');
             const statusDot = document.getElementById('sys-dot');
             const statusText = document.getElementById('sys-text');
-            
             statusText.innerText = "AI 加載中...";
             
-            // 建立 VAD 實例
             const myVAD = await vad.MicVAD.new({
                 onFrameProcessed: (probs) => {
                     const sens = 1.0 - (parseFloat(document.getElementById('p-sens').value) / 100);
                     vFill.style.width = (probs.isSpeech * 100) + "%";
-
                     if (probs.isSpeech > sens) {
                         setFace('mouth', true);
                         if (talkTimer) clearTimeout(talkTimer);
@@ -266,27 +289,20 @@
                     }
                 }
             });
-
             myVAD.start();
             statusDot.classList.add('status-active');
             statusText.innerText = "AI 運作中";
-            console.log("AI 語音偵測引擎啟動成功！");
-            return true; // 成功啟動
-
+            return true;
         } catch (err) {
-            console.error("AI 引擎啟動失敗:", err);
-            return false; // 啟動失敗
+            console.error("AI 引擎失敗:", err);
+            return false;
         }
     }
 
-    // --- 頻率模式 (備援方案) ---
     async function startFallbackFFT() {
-        console.warn("AI 啟動失敗，自動降級至頻率偵測模式。");
-        
         const statusDot = document.getElementById('sys-dot');
         const statusText = document.getElementById('sys-text');
         const vFill = document.getElementById('v-meter');
-        
         statusText.innerText = "備援模式";
         
         if (!audioContext) audioContext = new AudioContext();
@@ -300,19 +316,11 @@
         
         function processAudio() {
             analyser.getByteFrequencyData(dataArray);
-            
-            // 只計算人聲頻段的能量 (過濾風聲)
             let vocalEnergy = 0;
-            for (let i = 5; i < 60; i++) { // ~200Hz to ~5kHz
-                vocalEnergy += dataArray[i];
-            }
-            
+            for (let i = 5; i < 60; i++) { vocalEnergy += dataArray[i]; }
             const avgEnergy = vocalEnergy / 55;
             vFill.style.width = Math.min(avgEnergy * 1.5, 100) + "%";
-            
-            // 靈敏度閥值
             const threshold = parseFloat(document.getElementById('p-sens').value) / 2;
-
             if (avgEnergy > threshold) {
                 setFace('mouth', true);
                 if (talkTimer) clearTimeout(talkTimer);
@@ -320,13 +328,11 @@
             }
             requestAnimationFrame(processAudio);
         }
-        
         processAudio();
         statusDot.classList.add('status-active');
     }
-// --- 模組 4: 系統啟動器與 OBS 傳送門 ---
 
-    // 隨機眨眼循環
+    // --- 模組 5 (修正版): 系統啟動器與 OBS 傳送門 ---
     function startBlinkLoop() {
         const nextBlink = Math.random() * 4000 + 2000;
         setTimeout(() => {
@@ -338,7 +344,6 @@
         }, nextBlink);
     }
 
-    // 主啟動按鈕
     document.getElementById('btn-start').onclick = async () => {
         const btn = document.getElementById('btn-start');
         const obsBtn = document.getElementById('btn-obs');
@@ -346,37 +351,21 @@
         btn.disabled = true;
 
         try {
-            // 1. 啟動背景相機
-            const vStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
-            });
+            const vStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
             video.srcObject = vStream;
             await video.play();
 
-            // 2. 載入 16 層圖層
-            await loadResources()
-
-            // 3. 嘗試啟動 AI，若失敗則自動降級
             const aiSuccess = await startVAD();
-            if (!aiSuccess) {
-                await startFallbackFFT(); // 啟動備援模式
-            }
-
-            // 4. 啟動眨眼
+            if (!aiSuccess) await startFallbackFFT();
+            
             startBlinkLoop();
-
-            // 5. 正式開始繪圖
             draw();
 
             btn.innerText = "系統運作中";
             btn.style.background = "#55ff55";
-            obsBtn.disabled = false; // 解鎖 OBS 按鈕
+            obsBtn.disabled = false;
             
-            // 5 秒後自動隱藏 UI
-            setTimeout(() => {
-                document.getElementById('ui').classList.add('hidden');
-            }, 5000);
-
+            setTimeout(() => { document.getElementById('ui').classList.add('hidden'); }, 5000);
         } catch (e) {
             alert("啟動錯誤: " + e.message);
             btn.disabled = false;
@@ -384,45 +373,27 @@
         }
     };
 
-    // --- ★★★ OBS 傳送門 (VDO.Ninja) ★★★ ---
     document.getElementById('btn-obs').onclick = () => {
         const obsBtn = document.getElementById('btn-obs');
         const linkBox = document.getElementById('obs-link-box');
-        
         obsBtn.innerText = "連線中...";
         obsBtn.disabled = true;
 
-        // 1. 從 Canvas 抓取畫面串流 (純淨畫面，無UI)
-        const canvasStream = canvas.captureStream(30); // 30 FPS
-
-        // 2. 建立 VDO.Ninja 實例
+        const canvasStream = canvas.captureStream(30);
         const ninja = new VDO.Ninja();
         ninja.push(canvasStream);
 
-        // 3. 監聽 Push 連結
         ninja.addEventListener("push", (e) => {
-            const pushLink = e.push;
-            linkBox.innerHTML = `<b>傳送此連結給你朋友:</b><br>${pushLink}`;
+            linkBox.innerHTML = `<b>傳送此連結給你朋友:</b><br>${e.push}`;
             linkBox.style.display = "block";
-            obsBtn.innerText = "已連線到 OBS";
+            obsBtn.innerText = "已連線 OBS";
             obsBtn.style.background = "#ff9900";
-            
-            // 將聲音也傳送過去 (如果需要)
-            if (audioContext && audioContext.destination.stream) {
-                ninja.push(audioContext.destination.stream);
-            }
         });
-
-        ninja.addEventListener("error", () => {
-            alert("VDO.Ninja 連線失敗");
-            obsBtn.disabled = false;
-        });
-
+        ninja.addEventListener("error", () => { obsBtn.disabled = false; });
         ninja.connect();
     };
 
-
-    // 高畫質適配
+    // --- 模組 6 (修正版): 最終封裝 ---
     function setupCanvas() {
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr;
@@ -431,15 +402,21 @@
         canvas.style.height = window.innerHeight + 'px';
         ctx.scale(dpr, dpr);
     }
-    window.onresize = setupCanvas;
-    window.onload = setupCanvas;
 
-    // 雙擊喚回 UI
+    // ★ 唯一的程式入口點
+    window.onload = () => {
+        setupCanvas();
+        loadResources(); // 網頁一開就載入圖片，不等按鈕
+    };
+    
+    window.onresize = setupCanvas;
+
     document.body.ondblclick = (e) => {
         if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
             document.getElementById('ui').classList.toggle('hidden');
         }
     };
+
 </script>
 </body>
 </html>
