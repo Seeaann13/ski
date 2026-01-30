@@ -4,56 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Ski-VTuber V12.1 OBS Link</title>
+    <title>Ski-VTuber V12.2 Position Fix</title>
     
-    <!-- 1. AI 語音核心 -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web/dist/bundle.min.js"></script>
-    <!-- 2. VDO.Ninja API (用於傳送畫面到 OBS) -->
     <script src="https://unpkg.com/@vdo.ninja/vdo.ninja.js"></script>
 
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; width: 100vw; height: 100vh; touch-action: none; background: #000; }
 
-        /* 導播面板 */
         #ui {
             position: absolute; top: 10px; left: 10px; width: 280px; z-index: 100;
             background: rgba(10, 10, 15, 0.9); color: #00d2ff; padding: 15px; 
             border-radius: 16px; border: 1px solid rgba(0, 210, 255, 0.3);
             backdrop-filter: blur(12px); box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            font-size: 13px; transition: opacity 0.3s;
+            font-size: 13px;
         }
 
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .status-dot { width: 10px; height: 10px; background: #555; border-radius: 50%; display: inline-block; margin-right: 5px; }
         .status-active { background: #00ff00; box-shadow: 0 0 8px #00ff00; }
         
-        /* 訊號條 */
-        .meter-box { background: #222; height: 6px; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+        .meter-box { background: #222; height: 6px; border-radius: 3px; margin: 8px 0; overflow: hidden; }
         #v-meter { width: 0%; height: 100%; background: linear-gradient(90deg, #00d2ff, #00ff99); transition: width 0.05s; }
 
         label { display: block; color: #aaa; margin-top: 10px; font-size: 11px; font-weight: bold; }
-        input[type=range] { width: 100%; accent-color: #00d2ff; margin: 5px 0; cursor: pointer; }
+        input[type=range] { width: 100%; accent-color: #00d2ff; margin: 5px 0; }
 
-        /* 按鈕群 */
         .btn-group { display: flex; gap: 10px; margin-top: 15px; }
         button { 
             flex: 1; padding: 12px; border: none; border-radius: 8px; 
             font-weight: bold; cursor: pointer; font-size: 12px; color: #fff;
             background: #333; transition: 0.2s;
         }
-        #btn-start { background: linear-gradient(135deg, #00d2ff, #0055ff); color: white; }
-        #btn-obs { background: linear-gradient(135deg, #ff9900, #ff5500); color: white; }
+        #btn-start { background: linear-gradient(135deg, #00d2ff, #0055ff); }
+        #btn-obs { background: linear-gradient(135deg, #ff9900, #ff5500); }
         
-        .hidden { opacity: 0; pointer-events: none; }
-        
-        /* OBS 連結顯示區 */
-        #obs-link-box {
-            display: none; margin-top: 10px; padding: 10px; background: #222; 
-            border-radius: 8px; word-break: break-all; font-size: 10px; color: #fff;
-            border: 1px dashed #666; user-select: text;
-        }
+        #obs-link-box { display: none; margin-top: 10px; padding: 10px; background: #222; border-radius: 8px; font-size: 10px; color: #fff; border: 1px dashed #666; user-select: text; word-break: break-all; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -61,24 +49,23 @@
 <canvas id="vtuber-canvas"></canvas>
 
 <div id="ui">
-    <div class="header">
-        <span style="font-weight:900; font-size:15px; letter-spacing:1px;">V12.1 抹茶完全體</span>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-weight:900; font-size:15px;">V12.2 位置救援版</span>
         <div><span id="sys-dot" class="status-dot"></span><span id="sys-text" style="font-size:10px;">待機</span></div>
     </div>
 
-    <!-- 語音監測 -->
-    <div style="font-size:11px; color:#888;">語音訊號 (AI/頻率):</div>
+    <div style="font-size:11px; color:#888;">語音訊號:</div>
     <div class="meter-box"><div id="v-meter"></div></div>
 
-    <!-- 參數控制 -->
-    <label>位置 X / Y (請依手機調整):</label>
-    <div style="display:flex; gap:5px;">
-        <input type="range" id="p-x" min="-300" max="300" value="0">
-        <input type="range" id="p-y" min="-300" max="400" value="150">
-    </div>
+    <!-- 救援關鍵：更大的調整範圍 -->
+    <label>位置 Y (上下拉動找人):</label>
+    <input type="range" id="p-y" min="-800" max="500" value="-300">
+    
+    <label>位置 X (左右):</label>
+    <input type="range" id="p-x" min="-400" max="400" value="0">
     
     <label>縮放 (Scale):</label>
-    <input type="range" id="p-scale" min="0.3" max="2.0" step="0.05" value="0.85">
+    <input type="range" id="p-scale" min="0.2" max="2.5" step="0.05" value="0.9">
 
     <label>靈敏度 (Sensitivity):</label>
     <input type="range" id="p-sens" min="0" max="100" value="70">
@@ -86,53 +73,31 @@
     <label>物理風力 (Wind):</label>
     <input type="range" id="p-wind" min="0" max="10" step="0.1" value="3.0">
 
-    <!-- 操作按鈕 -->
     <div class="btn-group">
         <button id="btn-start">① 啟動系統</button>
         <button id="btn-obs" disabled>② 傳送 OBS</button>
     </div>
     
-    <div id="obs-link-box">
-        連結生成中...
-    </div>
-
+    <div id="obs-link-box"></div>
     <button onclick="document.getElementById('ui').classList.add('hidden')" style="width:100%; margin-top:10px; background:transparent; border:1px solid #444; color:#888;">隱藏介面 (雙擊喚回)</button>
+    <div id="status" style="text-align:center; color:#555; font-size:9px; margin-top:5px;">準備就緒</div>
 </div>
 
 <script>
-// --- [模組 1 結束] ---
-// --- 模組 2: 物理引擎與資源管理 ---
-
     class PhysicsLayer {
         constructor(name, img, type, z) {
             this.name = name; this.img = img; this.type = type; this.z = z;
-            this.angle = 0; this.vel = 0; this.acc = 0;
-            this.visible = true; this.id = name.split('.')[0];
-            
-            // 物理屬性預設
+            this.angle = 0; this.vel = 0; this.acc = 0; this.visible = true;
+            this.id = name.split('.')[0];
             this.mass = 1.0; this.stiffness = 0.1; this.damping = 0.9;
-            
-            // 根據檔名自動微調物理
-            if (name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.15; } // 輕髮
-            if (name.includes('_H')) { this.mass = 2.5; this.stiffness = 0.05; this.damping = 0.85; } // 重髮
-            if (name.includes('front')) { this.mass = 0.8; this.stiffness = 0.12; } // 瀏海
+            if (name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.15; }
+            if (name.includes('_H')) { this.mass = 2.5; this.stiffness = 0.05; this.damping = 0.85; }
+            if (name.includes('front')) { this.mass = 0.8; this.stiffness = 0.12; }
         }
-
         update(wind, headSway) {
-            // 靜態物體跟隨頭部平移，但不旋轉
             if (this.type === 'static') return;
-            
-            // 五官與頭部：直接鎖定角度，不進行物理擺盪 (防抖)
-            if (this.type === 'head' || this.type === 'face') {
-                this.angle = headSway;
-                return;
-            }
-
-            // 頭髮：物理模擬
-            // 目標角度 = 風力 + 頭部慣性
+            if (this.type === 'head' || this.type === 'face') { this.angle = headSway; return; }
             let target = (wind * (2 - this.mass*0.3)) + (headSway * this.mass * 0.5);
-            
-            // 彈簧公式 F = -kx - cv
             let force = (target - this.angle) * this.stiffness;
             let acc = force / this.mass;
             this.vel = (this.vel + acc) * this.damping;
@@ -140,28 +105,23 @@
         }
     }
 
-    // 全域變數
     const canvas = document.getElementById('vtuber-canvas');
     const ctx = canvas.getContext('2d');
     const layers = [];
-    let globalTime = 0;
-    
-    // 串流變數
     const video = document.createElement('video');
     video.autoplay = true; video.muted = true; video.playsInline = true;
+    let globalTime = 0;
 
-    // ★ 關鍵圖層順序 (Z-Index)
+    // 檔案清單
     const fileList = [
-        {n:'jacket_back.png', t:'static', z:5},  // 後領 (底層)
-        {n:'head.png',        t:'head',   z:10}, // 頭/脖子 (中間)
-        {n:'body.png',        t:'static', z:20}, // 身體/前領 (蓋住脖子)
-        
+        {n:'jacket_back.png', t:'static', z:5},
+        {n:'head.png',        t:'head',   z:10},
+        {n:'body.png',        t:'static', z:20},
         {n:'ears.png',        t:'head',   z:25},
         {n:'mouth_close.png', t:'face',   z:26, id:'m_close'},
         {n:'mouth_open.png',  t:'face',   z:26, id:'m_open', v:false},
         {n:'eyes_open.png',   t:'face',   z:27, id:'e_open'},
         {n:'eyes_closed.png', t:'face',   z:27, id:'e_closed', v:false},
-        
         {n:'hair_base.png',   t:'hair',   z:30},
         {n:'hair_H1.png',     t:'hair',   z:31},
         {n:'hair_H2.png',     t:'hair',   z:31},
@@ -172,116 +132,79 @@
         {n:'layer-front2.png',t:'hair',   z:40}
     ];
 
-    // --- 繪圖迴圈 ---
     function draw() {
-        // 設定高畫質
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr;
         canvas.height = window.innerHeight * dpr;
         ctx.scale(dpr, dpr);
         const w = window.innerWidth;
         const h = window.innerHeight;
-
         ctx.clearRect(0,0,w,h);
 
-        // 1. 畫相機背景
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (video.readyState === 4) {
             const s = Math.max(w/video.videoWidth, h/video.videoHeight);
             ctx.drawImage(video, (w-video.videoWidth*s)/2, (h-video.videoHeight*s)/2, video.videoWidth*s, video.videoHeight*s);
         }
 
-        // 2. 計算全域物理
         globalTime += 0.05;
-        const windVal = parseFloat(document.getElementById('p-wind').value);
-        // 自然風場 (隨機擾動)
-        const wind = (windVal * 0.02) + (Math.sin(globalTime * 0.7) * 0.01) + (Math.sin(globalTime * 2.3) * 0.005);
-        // 頭部呼吸擺動
+        const wind = (parseFloat(document.getElementById('p-wind').value) * 0.02) + (Math.sin(globalTime)*0.01);
         const headSway = Math.sin(globalTime * 0.5) * 0.03;
-
         const scale = parseFloat(document.getElementById('p-scale').value);
         const offX = parseFloat(document.getElementById('p-x').value);
         const offY = parseFloat(document.getElementById('p-y').value);
 
-        // 3. 繪製圖層
         layers.forEach(l => {
             if (!l.visible) return;
             l.update(wind, headSway);
-
             ctx.save();
-            // 移動到螢幕底部中央
+            // ★ 位置修正：這裡應用了 offY (預設 -300)
             ctx.translate(w/2 + offX, h + offY);
             ctx.scale(scale, scale);
-
-            // ★ 關鍵：錨點修正 (Anchor Fix) ★
-            // 將旋轉中心移到圖片頂部往下約 70% 處 (你的頭部位置)
-            // 這樣旋轉時，頭頂就不會位移，只有髮尾會動
             const pivotY = -l.img.height * 0.7; 
-            
             if (l.type !== 'static') {
-                ctx.translate(0, pivotY); // 移到頭頂
-                ctx.rotate(l.angle);      // 旋轉
-                ctx.translate(0, -pivotY);// 移回來
+                ctx.translate(0, pivotY); ctx.rotate(l.angle); ctx.translate(0, -pivotY);
             }
-
-            // 畫圖 (以底部中心為基準)
             ctx.drawImage(l.img, -l.img.width/2, -l.img.height);
             ctx.restore();
         });
-
         requestAnimationFrame(draw);
     }
-// --- 模組 3 (修正版): 資源載入器 ---
-    // (將 loadResources 獨立出來，確保任何地方都能呼叫)
+
     async function loadResources() {
         const status = document.getElementById('status');
         let count = 0;
-        
         for (let f of fileList) {
-            await new Promise(resolve => {
-                const img = new Image();
-                img.src = f.n;
+            await new Promise(r => {
+                const img = new Image(); img.src = f.n;
                 img.onload = () => {
-                    const layer = new PhysicsLayer(f.n, img, f.t, f.z);
-                    if (f.id) layer.id = f.id;
-                    if (f.v !== undefined) layer.visible = f.v;
-                    layers.push(layer);
-                    count++;
-                    status.innerText = `載入中: ${Math.round(count/fileList.length*100)}%`;
-                    resolve();
+                    const l = new PhysicsLayer(f.n, img, f.t, f.z);
+                    if (f.id) l.id = f.id; if (f.v !== undefined) l.visible = f.v;
+                    layers.push(l); count++; status.innerText = `載入: ${Math.round(count/fileList.length*100)}%`; r();
                 };
-                img.onerror = () => {
-                    console.warn("無法加載: " + f.n);
-                    resolve(); 
-                };
+                img.onerror = () => { console.log("缺圖: "+f.n); r(); };
             });
         }
-        layers.sort((a, b) => a.z - b.z);
-        status.innerText = "資源載入完成，請點啟動";
+        layers.sort((a,b) => a.z - b.z);
+        status.innerText = "就緒";
     }
 
-    // --- 模組 4 (修正版): 雙軌 AI 語音偵測引擎 ---
-    let audioContext = null;
+    // --- 音訊與表情 ---
     let talkTimer = null;
-
     function setFace(part, isOpen) {
-        const oId = part === 'mouth' ? 'm_open' : 'e_open';
-        const cId = part === 'mouth' ? 'm_close' : 'e_closed';
-        const op = layers.find(l => l.id === oId);
-        const cl = layers.find(l => l.id === cId);
-        if (op && cl) { op.visible = isOpen; cl.visible = !isOpen; }
+        const oId = part==='mouth'?'m_open':'e_open';
+        const cId = part==='mouth'?'m_close':'e_closed';
+        const op = layers.find(l=>l.id===oId);
+        const cl = layers.find(l=>l.id===cId);
+        if(op&&cl){ op.visible=isOpen; cl.visible=!isOpen; }
     }
 
     async function startVAD() {
         try {
-            const vFill = document.getElementById('v-meter');
-            const statusDot = document.getElementById('sys-dot');
-            const statusText = document.getElementById('sys-text');
-            statusText.innerText = "AI 加載中...";
-            
+            document.getElementById('sys-text').innerText = "AI 加載中...";
             const myVAD = await vad.MicVAD.new({
                 onFrameProcessed: (probs) => {
-                    const sens = 1.0 - (parseFloat(document.getElementById('p-sens').value) / 100);
-                    vFill.style.width = (probs.isSpeech * 100) + "%";
+                    const sens = 1.0 - (document.getElementById('p-sens').value/100);
+                    document.getElementById('v-meter').style.width = (probs.isSpeech*100)+"%";
                     if (probs.isSpeech > sens) {
                         setFace('mouth', true);
                         if (talkTimer) clearTimeout(talkTimer);
@@ -290,133 +213,87 @@
                 }
             });
             myVAD.start();
-            statusDot.classList.add('status-active');
-            statusText.innerText = "AI 運作中";
+            document.getElementById('sys-dot').className = "status-dot status-active";
+            document.getElementById('sys-text').innerText = "AI 運作中";
             return true;
-        } catch (err) {
-            console.error("AI 引擎失敗:", err);
-            return false;
-        }
+        } catch (e) { return false; }
     }
 
     async function startFallbackFFT() {
-        const statusDot = document.getElementById('sys-dot');
-        const statusText = document.getElementById('sys-text');
-        const vFill = document.getElementById('v-meter');
-        statusText.innerText = "備援模式";
+        document.getElementById('sys-text').innerText = "備援模式";
+        document.getElementById('sys-dot').className = "status-dot status-active";
+        document.getElementById('sys-dot').style.backgroundColor = "#ffaa00"; // 橘燈
         
-        if (!audioContext) audioContext = new AudioContext();
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        function processAudio() {
-            analyser.getByteFrequencyData(dataArray);
-            let vocalEnergy = 0;
-            for (let i = 5; i < 60; i++) { vocalEnergy += dataArray[i]; }
-            const avgEnergy = vocalEnergy / 55;
-            vFill.style.width = Math.min(avgEnergy * 1.5, 100) + "%";
-            const threshold = parseFloat(document.getElementById('p-sens').value) / 2;
-            if (avgEnergy > threshold) {
+        const ctx = new AudioContext();
+        const ana = ctx.createAnalyser();
+        const src = ctx.createMediaStreamSource(stream);
+        const script = ctx.createScriptProcessor(2048, 1, 1);
+        src.connect(ana); ana.connect(script); script.connect(ctx.destination);
+        script.onaudioprocess = () => {
+            const data = new Uint8Array(ana.frequencyBinCount);
+            ana.getByteFrequencyData(data);
+            let e = 0; for(let i=5;i<60;i++) e+=data[i];
+            const vol = e/55;
+            document.getElementById('v-meter').style.width = Math.min(vol*1.5, 100)+"%";
+            if (vol > (105-document.getElementById('p-sens').value)) {
                 setFace('mouth', true);
                 if (talkTimer) clearTimeout(talkTimer);
                 talkTimer = setTimeout(() => setFace('mouth', false), 150);
             }
-            requestAnimationFrame(processAudio);
-        }
-        processAudio();
-        statusDot.classList.add('status-active');
+        };
     }
 
-    // --- 模組 5 (修正版): 系統啟動器與 OBS 傳送門 ---
-    function startBlinkLoop() {
-        const nextBlink = Math.random() * 4000 + 2000;
-        setTimeout(() => {
-            setFace('eyes', false);
-            setTimeout(() => {
-                setFace('eyes', true);
-                startBlinkLoop();
-            }, 150);
-        }, nextBlink);
+    function autoBlink() {
+        setFace('eyes', false);
+        setTimeout(() => { setFace('eyes', true); setTimeout(autoBlink, Math.random()*3000+2000); }, 150);
     }
 
+    // --- 啟動按鈕 ---
     document.getElementById('btn-start').onclick = async () => {
         const btn = document.getElementById('btn-start');
-        const obsBtn = document.getElementById('btn-obs');
-        btn.innerText = "正在初始化...";
-        btn.disabled = true;
-
+        btn.innerText = "初始化中..."; btn.disabled = true;
         try {
-            const vStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
-            video.srcObject = vStream;
-            await video.play();
-
+            const vStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            video.srcObject = vStream; await video.play();
+            
+            await loadResources(); // 載入圖片
+            
             const aiSuccess = await startVAD();
             if (!aiSuccess) await startFallbackFFT();
             
-            startBlinkLoop();
+            autoBlink();
             draw();
-
-            btn.innerText = "系統運作中";
-            btn.style.background = "#55ff55";
-            obsBtn.disabled = false;
             
-            setTimeout(() => { document.getElementById('ui').classList.add('hidden'); }, 5000);
-        } catch (e) {
-            alert("啟動錯誤: " + e.message);
-            btn.disabled = false;
-            btn.innerText = "啟動失敗 - 重試";
-        }
+            btn.innerText = "系統運作中"; btn.style.background = "#55ff55";
+            document.getElementById('btn-obs').disabled = false;
+            
+            setTimeout(() => document.getElementById('ui').classList.add('hidden'), 5000);
+        } catch(e) { alert("啟動錯誤: "+e.message); btn.disabled=false; }
     };
 
+    // --- OBS 傳送 ---
     document.getElementById('btn-obs').onclick = () => {
-        const obsBtn = document.getElementById('btn-obs');
-        const linkBox = document.getElementById('obs-link-box');
-        obsBtn.innerText = "連線中...";
-        obsBtn.disabled = true;
-
-        const canvasStream = canvas.captureStream(30);
+        const btn = document.getElementById('btn-obs');
+        const box = document.getElementById('obs-link-box');
+        btn.innerText = "連線中..."; btn.disabled = true;
         const ninja = new VDO.Ninja();
-        ninja.push(canvasStream);
-
+        ninja.push(canvas.captureStream(30));
         ninja.addEventListener("push", (e) => {
-            linkBox.innerHTML = `<b>傳送此連結給你朋友:</b><br>${e.push}`;
-            linkBox.style.display = "block";
-            obsBtn.innerText = "已連線 OBS";
-            obsBtn.style.background = "#ff9900";
+            box.innerText = e.push; box.style.display = "block";
+            btn.innerText = "已連線"; btn.style.background = "#ff9900";
         });
-        ninja.addEventListener("error", () => { obsBtn.disabled = false; });
         ninja.connect();
     };
 
-    // --- 模組 6 (修正版): 最終封裝 ---
-    function setupCanvas() {
+    function setup() {
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = window.innerWidth * dpr;
-        canvas.height = window.innerHeight * dpr;
-        canvas.style.width = window.innerWidth + 'px';
-        canvas.style.height = window.innerHeight + 'px';
+        canvas.width = window.innerWidth * dpr; canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth+'px'; canvas.style.height = window.innerHeight+'px';
         ctx.scale(dpr, dpr);
     }
-
-    // ★ 唯一的程式入口點
-    window.onload = () => {
-        setupCanvas();
-        loadResources(); // 網頁一開就載入圖片，不等按鈕
-    };
-    
-    window.onresize = setupCanvas;
-
-    document.body.ondblclick = (e) => {
-        if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
-            document.getElementById('ui').classList.toggle('hidden');
-        }
-    };
-
+    window.onload = setup; window.onresize = setup;
+    document.body.ondblclick = (e) => { if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT') document.getElementById('ui').classList.toggle('hidden'); };
 </script>
 </body>
 </html>
