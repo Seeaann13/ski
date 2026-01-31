@@ -3,49 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Matcha Ski V13.7 Pro Center-Sync</title>
+    <title>Matcha Ski V13.8 Stable Pro</title>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web/dist/bundle.min.js"></script>
 
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
-        #stage { position: relative; width: 100vw; height: 100vh; background: #000; display: flex; justify-content: center; align-items: center; }
+        #stage { position: relative; width: 100vw; height: 100vh; background: #000; overflow: hidden; }
         
-        /* 背景 Ninja 串流 */
+        /* 背景 Ninja 串流：強制置底，禁止互動 */
         iframe#ninja-bg {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             border: none; z-index: 1; pointer-events: none;
-            object-fit: cover;
+            object-fit: cover; background: #000;
         }
         
-        /* V皮畫布 */
+        /* V皮畫布：置頂 */
         canvas#vtuber-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
 
-        /* UI 設定面板 */
+        /* UI 面板 */
         #ui {
             position: absolute; top: 15px; left: 15px; width: 280px; z-index: 100;
-            background: rgba(10, 10, 15, 0.9); color: #00d2ff; padding: 18px; 
+            background: rgba(10, 10, 15, 0.95); color: #00d2ff; padding: 18px; 
             border-radius: 20px; border: 1px solid rgba(0, 210, 255, 0.4);
-            font-size: 12px; backdrop-filter: blur(15px);
+            font-size: 13px; backdrop-filter: blur(15px);
         }
         .hidden { display: none !important; }
+
         #ui-toggle {
             position: absolute; bottom: 25px; left: 25px; z-index: 999;
-            width: 44px; height: 44px; background: rgba(0, 210, 255, 0.2); 
+            width: 46px; height: 46px; background: rgba(0, 210, 255, 0.2); 
             border: 2px solid #00d2ff; border-radius: 50%; color: #00d2ff; 
-            display: flex; justify-content: center; align-items: center; font-size: 20px; cursor: pointer;
+            display: flex; justify-content: center; align-items: center; 
+            font-size: 24px; cursor: pointer; backdrop-filter: blur(5px);
         }
 
-        label { display: block; margin-top: 8px; color: #888; font-size: 10px; font-weight: bold; }
-        input[type=range], select { width: 100%; accent-color: #00d2ff; margin: 4px 0; background: #222; color: #fff; border: 1px solid #444; padding: 4px; border-radius: 4px; }
+        label { display: block; margin-top: 10px; color: #888; font-size: 11px; font-weight: bold; }
+        input[type=range], select { width: 100%; accent-color: #00d2ff; margin: 4px 0; background: #222; color: #fff; border: 1px solid #444; padding: 5px; border-radius: 5px; }
         
         #btn-start { 
             background: linear-gradient(135deg, #00d2ff, #0055ff); color: white; 
-            border: none; padding: 12px; width: 100%; border-radius: 10px; 
+            border: none; padding: 14px; width: 100%; border-radius: 10px; 
             font-weight: 900; margin-top: 10px; cursor: pointer;
         }
-        .meter-box { width: 100%; height: 6px; background: #222; border-radius: 3px; margin: 5px 0; overflow: hidden; position: relative; }
+        .meter-box { width: 100%; height: 6px; background: #222; border-radius: 3px; margin: 8px 0; overflow: hidden; position: relative; }
         #v-meter { height: 100%; width: 0%; background: #00ffcc; transition: width 0.05s; }
         #status-log { font-size: 10px; text-align: center; margin-top: 8px; color: #ffaa00; }
     </style>
@@ -53,35 +55,35 @@
 <body>
 
 <div id="stage">
-    <iframe id="ninja-bg" allow="autoplay; microphone;"></iframe>
+    <iframe id="ninja-bg" src="about:blank" allow="autoplay; microphone;"></iframe>
     <canvas id="vtuber-canvas"></canvas>
     <div id="ui-toggle">⚙️</div>
 
     <div id="ui">
-        <div style="text-align:center; font-weight:900; font-size:15px; margin-bottom:5px;">V13.7 1:1 對位版</div>
+        <div style="text-align:center; font-weight:900; font-size:16px; margin-bottom:5px; color:#fff;">V13.8 最終穩定版</div>
         
         <label>1. 滑雪場 ID:</label>
         <input type="text" id="stream-id" value="sean1357">
 
-        <label>2. 選擇音訊輸入 (台灣端請選系統聲音):</label>
-        <select id="audio-source"><option>等待啟動...</option></select>
+        <label>2. 音訊輸入 (台灣端請選系統聲音):</label>
+        <select id="audio-source"></select>
 
-        <label>3. 聲音反應度:</label>
+        <label>3. 語音訊號條:</label>
         <div class="meter-box"><div id="v-meter"></div></div>
-        <input type="range" id="p-sens" min="0" max="100" value="70">
+        <input type="range" id="p-sens" min="0" max="100" value="75">
         
-        <label>4. 物理風力 / 人物縮放:</label>
+        <label>4. 物理風力 / 縮放大小:</label>
         <input type="range" id="p-wind" min="0" max="10" step="0.1" value="2.5">
-        <input type="range" id="p-scale" min="0.1" max="1.5" step="0.01" value="0.7">
+        <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
 
-        <label>5. 位置微調 (X / Y):</label>
+        <label>5. 位置微調 (左右 / 上下):</label>
         <div style="display:flex; gap:5px;">
-            <input type="range" id="p-x" min="-1000" max="1000" value="0">
-            <input type="range" id="p-y" min="-1000" max="1000" value="0">
+            <input type="range" id="p-x" min="-500" max="500" value="0">
+            <input type="range" id="p-y" min="-600" max="600" value="300">
         </div>
 
-        <button id="btn-start">🚀 啟動合成</button>
-        <div id="status-log">就緒</div>
+        <button id="btn-start">🚀 啟動系統</button>
+        <div id="status-log">等待啟動...</div>
     </div>
 </div>
 
@@ -98,7 +100,7 @@
             this.angle = 0; this.vel = 0; this.visible = true; this.id = name.split('.')[0];
             this.mass = 1.0; this.stiffness = 0.08; this.damping = 0.9;
             if (name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.15; }
-            if (name.includes('_H')) { this.mass = 3.0; this.stiffness = 0.05; }
+            if (name.includes('_H')) { this.mass = 2.5; this.stiffness = 0.05; }
         }
         update(wind, headSway) {
             if (this.type === 'static' || this.type === 'head' || this.type === 'face') { this.angle = headSway; return; }
@@ -160,22 +162,15 @@
             if (!l.visible) return;
             l.update(wind, headSway);
             ctx.save();
-            
-            // ★ 修復核心：中心點 1:1 疊加 ★
-            // 既然圖是 2000x2000，我們將原點移到螢幕中心，直接繪製
-            ctx.translate(w/2 + offX, h/2 + offY);
+            // 修正定位：改回底部中心對齊，防止消失
+            ctx.translate(w/2 + offX, h + offY);
             ctx.scale(scale, scale);
-
-            // 以畫布中心 (1000, 1000) 作為旋轉支點
-            // 這對 2000x2000 的全畫布輸出最精準
+            const pivotY = -l.img.height * 0.75; 
             if (l.type !== 'static') {
-                ctx.translate(0, -200); // 這裡微調旋轉點至大約脖子高度
-                ctx.transform(1, 0, l.angle, 1, 0, 0); 
-                ctx.translate(0, 200);
+                ctx.translate(0, pivotY); ctx.transform(1, 0, l.angle, 1, 0, 0); ctx.translate(0, -pivotY);
             }
-
-            // 畫圖：座標 (-1000, -1000) 讓 2000x2000 的中心點對齊 (0,0)
-            ctx.drawImage(l.img, -1000, -1000, 2000, 2000);
+            // 繪製圖片：寬高自動適配
+            ctx.drawImage(l.img, -l.img.width/2, -l.img.height);
             ctx.restore();
         });
         requestAnimationFrame(draw);
@@ -192,21 +187,18 @@
 
     async function startAudio() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { deviceId: { exact: audioSelect.value } } 
-            });
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: audioSelect.value } } });
             const myVAD = await vad.MicVAD.new({
-                stream: stream,
                 onFrameProcessed: (probs) => {
                     const sens = document.getElementById('p-sens').value;
                     const baseT = 1.0 - (sens / 100);
                     document.getElementById('v-meter').style.width = (probs.isSpeech*100)+"%";
-                    if (probs.isSpeech > baseT + 0.25) { setMouthState(2); resetTalkTimer(); }
+                    if (probs.isSpeech > baseT + 0.2) { setMouthState(2); resetTalkTimer(); }
                     else if (probs.isSpeech > baseT) { setMouthState(1); resetTalkTimer(); }
                 }
             });
             myVAD.start();
-        } catch (e) { alert("音訊啟動失敗: " + e.message); }
+        } catch (e) { console.error(e); }
     }
 
     let talkTimer = null;
@@ -215,18 +207,13 @@
         talkTimer = setTimeout(() => { setMouthState(1); setTimeout(() => setMouthState(0), 100); }, 150);
     }
 
-    async function initAudioDevices() {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audios = devices.filter(d => d.kind === 'audioinput');
-        audioSelect.innerHTML = audios.map(a => `<option value="${a.deviceId}">${a.label || 'Audio Source'}</option>`).join('');
-    }
-
     document.getElementById('btn-start').onclick = async () => {
         const btn = document.getElementById('btn-start');
-        btn.innerText = "載入中..."; btn.disabled = true;
+        btn.innerText = "資源載入中..."; btn.disabled = true;
         
         const sID = document.getElementById('stream-id').value; 
-        ninjaFrame.src = `https://vdo.ninja/?view=${sID}&room=sss&solo&autoplay=1&cleanoutput=1&transparent=0&playsinline=1&cover=1`;
+        // 最終背景參數修復：防止 PiP 彈出
+        ninjaFrame.src = `https://vdo.ninja/?view=${sID}&room=sss&solo&autoplay=1&cleanoutput=1&transparent=0&playsinline=1&cover=1&hidden=1`;
 
         await loadResources();
         await startAudio();
@@ -242,7 +229,8 @@
     };
 
     window.onload = async () => {
-        await initAudioDevices();
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        audioSelect.innerHTML = devs.filter(d=>d.kind==='audioinput').map(a=>`<option value="${a.deviceId}">${a.label || '音訊設備'}</option>`).join('');
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr; canvas.height = window.innerHeight * dpr;
         ctx.scale(dpr, dpr);
