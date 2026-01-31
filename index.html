@@ -2,88 +2,91 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Matcha Ski V13.2 Fast Boot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Matcha Ski V13.3 Final Stable</title>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web/dist/bundle.min.js"></script>
 
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        canvas { display: block; width: 100vw; height: 100vh; background: #000; }
+        #stage { position: relative; width: 100vw; height: 100vh; background: #000; }
         
-        /* 背景串流 iframe */
+        /* 修正背景：強制鋪滿不留白 */
         iframe#ninja-bg {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            border: none; z-index: 0; pointer-events: none; transform: scale(1.02);
+            border: none; z-index: 0; pointer-events: none;
+            object-fit: cover;
         }
         
-        /* 前景 Canvas */
         canvas#vtuber-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
 
-        /* UI */
+        /* UI 面板修正：不再自動隱藏 */
         #ui {
             position: absolute; top: 15px; left: 15px; width: 260px; z-index: 100;
-            background: rgba(0, 0, 0, 0.9); color: #00d2ff; padding: 15px; 
-            border-radius: 15px; border: 1px solid #00d2ff; font-size: 13px;
+            background: rgba(10, 10, 15, 0.95); color: #00d2ff; padding: 15px; 
+            border-radius: 15px; border: 1px solid rgba(0, 210, 255, 0.5);
+            font-size: 13px; backdrop-filter: blur(10px);
         }
         .hidden { display: none !important; }
-        label { display: block; margin-top: 8px; color: #888; font-size: 11px; }
-        input[type=range] { width: 100%; accent-color: #00d2ff; }
-        #btn-start { 
-            background: #00d2ff; color: #000; border: none; padding: 12px; width: 100%; 
-            border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px;
+
+        /* 喚回介面的按鈕：永遠在那裡，但不遮擋畫面 */
+        #ui-toggle {
+            position: absolute; bottom: 20px; left: 20px; z-index: 200;
+            width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 1px solid #00d2ff;
+            border-radius: 50%; color: #00d2ff; font-size: 20px; display: flex; 
+            justify-content: center; align-items: center; cursor: pointer;
         }
-        #status-log { color: #ffaa00; font-size: 10px; text-align: center; margin-top: 5px; min-height: 15px; }
-        
+
+        label { display: block; margin-top: 8px; color: #888; font-size: 11px; }
+        input[type=range] { width: 100%; accent-color: #00d2ff; margin: 5px 0; }
+        #btn-start { background: #00d2ff; color: #000; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; margin-top: 10px; }
         .meter-box { width: 100%; height: 5px; background: #333; margin-top: 5px; }
         #v-meter { height: 100%; width: 0%; background: #00ff00; transition: width 0.05s; }
     </style>
 </head>
 <body>
 
-<!-- 背景 Ninja -->
-<iframe id="ninja-bg" allow="autoplay; microphone; camera; display-capture"></iframe>
-<canvas id="vtuber-canvas"></canvas>
+<div id="stage">
+    <!-- 加入 playsinline=1 和 cover=1 解決 iPad 縮小窗問題 -->
+    <iframe id="ninja-bg" allow="autoplay; microphone; camera;"></iframe>
+    <canvas id="vtuber-canvas"></canvas>
 
-<div id="ui">
-    <div style="text-align:center; font-weight:900;">V13.2 急速啟動版</div>
-    
-    <label>1. 滑雪場 ID:</label>
-    <input type="text" id="stream-id" value="sean1357" style="width:100%; background:#222; color:#fff; border:1px solid #444; padding:5px;">
+    <!-- 介面開關 -->
+    <div id="ui-toggle">⚙️</div>
 
-    <label>2. 聲音反應:</label>
-    <div class="meter-box"><div id="v-meter"></div></div>
-    <input type="range" id="p-sens" min="0" max="100" value="70">
-    
-    <label>3. 物理風力:</label>
-    <input type="range" id="p-wind" min="0" max="10" step="0.1" value="3.0">
+    <div id="ui">
+        <div style="text-align:center; font-weight:900;">V13.3 最終穩定版</div>
+        
+        <label>1. 滑雪場 ID:</label>
+        <input type="text" id="stream-id" value="sean1357" style="width:100%; background:#222; color:#fff; border:1px solid #444; padding:5px;">
 
-    <label>4. 位置/縮放:</label>
-    <div style="display:flex; gap:5px;">
-        <input type="range" id="p-x" min="-400" max="400" value="0">
-        <input type="range" id="p-y" min="-400" max="400" value="100">
+        <label>2. 聲音反應度:</label>
+        <div class="meter-box"><div id="v-meter"></div></div>
+        <input type="range" id="p-sens" min="0" max="100" value="70">
+        
+        <label>3. 物理風力:</label>
+        <input type="range" id="p-wind" min="0" max="10" step="0.1" value="3.0">
+
+        <label>4. 人物上下 (調低找脖子):</label>
+        <input type="range" id="p-y" min="-600" max="600" value="350">
+        <label>5. 縮放大小:</label>
+        <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
+
+        <button id="btn-start">點此啟動系統</button>
+        <div id="status-log" style="font-size:10px; text-align:center; margin-top:5px; color:#ffaa00;">等待啟動...</div>
     </div>
-    <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
-
-    <button id="btn-start">啟動系統</button>
-    <div id="status-log">等待指令...</div>
-    
-    <button onclick="document.getElementById('ui').classList.add('hidden')" style="width:100%; background:transparent; border:1px solid #555; color:#888; padding:5px; margin-top:10px; font-size:10px;">隱藏介面</button>
 </div>
 
 <script>
-    // --- 1. 自動背景載入 ---
     const ninjaFrame = document.getElementById('ninja-bg');
-    const streamID = document.getElementById('stream-id').value; 
-    // 這裡我們預設載入 sean1357，並加上 &novideo=0 確保有影像
-    ninjaFrame.src = `https://vdo.ninja/?view=${streamID}&autoplay=1&cleanoutput=1&transparent=0`;
+    const ui = document.getElementById('ui');
+    const toggle = document.getElementById('ui-toggle');
 
-    // 參數偵測
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('obs')) document.getElementById('ui').style.display = 'none';
+    // 點擊齒輪才切換介面，這在平板上最穩
+    toggle.onclick = () => ui.classList.toggle('hidden');
 
-    // --- 2. 物理與資源 ---
+    // 物理與資源載入邏輯
     class PhysicsLayer {
         constructor(name, img, type, z) {
             this.name = name; this.img = img; this.type = type; this.z = z;
@@ -91,15 +94,11 @@
             this.mass = 1.0; this.stiffness = 0.1; this.damping = 0.9;
             if (name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.15; }
             if (name.includes('_H')) { this.mass = 2.5; this.stiffness = 0.05; }
-            if (name.includes('front')) { this.mass = 0.8; this.stiffness = 0.12; }
         }
         update(wind, headSway) {
-            if (this.type === 'static') return;
-            if (this.type === 'head' || this.type === 'face') { this.angle = headSway; return; }
+            if (this.type === 'static' || this.type === 'head' || this.type === 'face') { this.angle = headSway; return; }
             let target = (wind * (2 - this.mass*0.3)) + (headSway * this.mass * 0.5);
-            let force = (target - this.angle) * this.stiffness;
-            let acc = force / this.mass;
-            this.vel = (this.vel + acc) * this.damping;
+            this.vel = (this.vel + (target - this.angle) * this.stiffness) * this.damping;
             this.angle += this.vel;
         }
     }
@@ -111,8 +110,8 @@
 
     const fileList = [
         {n:'jacket_back.png', t:'static', z:10},
-        {n:'head.png',        t:'head',   z:15},
-        {n:'body.png',        t:'static', z:20},
+        {n:'head.png',        t:'head',   z:15}, // 頭在領子後
+        {n:'body.png',        t:'static', z:20}, // 身體蓋住頭
         {n:'ears.png',        t:'head',   z:25},
         {n:'mouth_close.png', t:'face',   z:26, id:'m_close'},
         {n:'mouth_open.png',  t:'face',   z:26, id:'m_open', v:false},
@@ -126,23 +125,17 @@
     ];
 
     async function loadResources() {
-        let count = 0;
-        document.getElementById('status-log').innerText = "下載 V 皮圖層中...";
         for (let f of fileList) {
-            await new Promise(r => {
-                const img = new Image(); img.src = f.n + "?t=" + Date.now();
-                img.onload = () => {
-                    const l = new PhysicsLayer(f.n, img, f.t, f.z);
-                    if (f.id) l.id = f.id; if (f.v !== undefined) l.visible = f.v;
-                    layers.push(l); count++; r();
-                };
-                img.onerror = () => { console.log("缺圖跳過: "+f.n); r(); };
-            });
+            const img = new Image(); img.src = f.n + "?t=" + Date.now();
+            await new Promise(r => { img.onload = () => {
+                const l = new PhysicsLayer(f.n, img, f.t, f.z);
+                if (f.id) l.id = f.id; if (f.v !== undefined) l.visible = f.v;
+                layers.push(l); r();
+            }; img.onerror = r; });
         }
         layers.sort((a,b) => a.z - b.z);
     }
 
-    // --- 3. 繪圖迴圈 ---
     function draw() {
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr; canvas.height = window.innerHeight * dpr;
@@ -153,14 +146,13 @@
         const wind = (parseFloat(document.getElementById('p-wind').value) * 0.02) + (Math.sin(globalTime*0.7)*0.01);
         const headSway = Math.sin(globalTime * 0.5) * 0.03;
         const scale = parseFloat(document.getElementById('p-scale').value);
-        const offX = parseFloat(document.getElementById('p-x').value);
         const offY = parseFloat(document.getElementById('p-y').value);
 
         layers.forEach(l => {
             if (!l.visible) return;
             l.update(wind, headSway);
             ctx.save();
-            ctx.translate(window.innerWidth/2 + offX, window.innerHeight + offY);
+            ctx.translate(window.innerWidth/2, window.innerHeight + offY);
             ctx.scale(scale, scale);
             const pivotY = -l.img.height * 0.7; 
             if (l.type !== 'static') {
@@ -172,126 +164,63 @@
         requestAnimationFrame(draw);
     }
 
-    // --- 4. 聽覺 (AI + 備援) ---
-    let talkTimer = null;
     function setFace(part, isOpen) {
-        const oId = part==='mouth'?'m_open':'e_open'; const cId = part==='mouth'?'m_close':'e_closed';
-        const op = layers.find(l=>l.id===oId); const cl = layers.find(l=>l.id===cId);
+        const op = layers.find(l=>l.id===(part==='mouth'?'m_open':'e_open'));
+        const cl = layers.find(l=>l.id===(part==='mouth'?'m_close':'e_closed'));
         if(op&&cl){ op.visible=isOpen; cl.visible=!isOpen; }
     }
 
-    // ★ 關鍵：帶有超時機制的 AI 啟動器 ★
-    async function startSmartAudio() {
-        const status = document.getElementById('status-log');
-        
-        // 1. 先嘗試啟動備援 (AudioContext)，確保至少有聲音輸入
-        let audioCtx;
+    // 啟動音訊邏輯 (AI + 備援)
+    async function startAudio() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            // 這裡不綁定分析器，只為了喚醒權限
-        } catch(e) {
-            alert("請允許麥克風權限！");
-            return;
-        }
-
-        // 2. 嘗試並行下載 AI，設定 8 秒超時
-        status.innerText = "嘗試載入 AI 模型 (限時 8 秒)...";
-        
-        const aiPromise = vad.MicVAD.new({
-            onFrameProcessed: (probs) => {
-                // AI 成功運作中
-                const sens = 1.0 - (document.getElementById('p-sens').value/100);
-                document.getElementById('v-meter').style.width = (probs.isSpeech*100)+"%";
-                if (probs.isSpeech > sens) {
-                    setFace('mouth', true);
-                    if (talkTimer) clearTimeout(talkTimer);
-                    talkTimer = setTimeout(() => setFace('mouth', false), 150);
+            const myVAD = await vad.MicVAD.new({
+                onFrameProcessed: (probs) => {
+                    const sens = 1.0 - (document.getElementById('p-sens').value/100);
+                    document.getElementById('v-meter').style.width = (probs.isSpeech*100)+"%";
+                    if (probs.isSpeech > sens) {
+                        setFace('mouth', true);
+                        clearTimeout(window.tT); window.tT = setTimeout(() => setFace('mouth', false), 150);
+                    }
                 }
-            }
-        });
-
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("TIMEOUT")), 8000)
-        );
-
-        try {
-            const myVAD = await Promise.race([aiPromise, timeoutPromise]);
+            });
             myVAD.start();
-            status.innerText = "AI 模式運作中 (最佳)";
-            status.style.color = "#00ff00";
-        } catch (err) {
-            console.warn("AI 啟動超時或失敗，切換備援:", err);
-            status.innerText = "備援模式 (頻率偵測)";
-            startFallbackMode(audioCtx); // 啟動備援
-        }
-    }
-
-    // 備援頻率模式
-    async function startFallbackMode(existingCtx) {
-        try {
+            document.getElementById('status-log').innerText = "AI 模式運作中";
+        } catch (e) {
+            document.getElementById('status-log').innerText = "頻率偵測模式";
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const ctx = existingCtx || new AudioContext();
-            const ana = ctx.createAnalyser();
-            const src = ctx.createMediaStreamSource(stream);
-            const script = ctx.createScriptProcessor(2048, 1, 1);
-            src.connect(ana); ana.connect(script); script.connect(ctx.destination);
-            
+            const ctxA = new AudioContext(); const ana = ctxA.createAnalyser();
+            const src = ctxA.createMediaStreamSource(stream); const script = ctxA.createScriptProcessor(2048, 1, 1);
+            src.connect(ana); ana.connect(script); script.connect(ctxA.destination);
             script.onaudioprocess = () => {
-                const data = new Uint8Array(ana.frequencyBinCount);
-                ana.getByteFrequencyData(data);
+                const data = new Uint8Array(ana.frequencyBinCount); ana.getByteFrequencyData(data);
                 let sum = 0; for(let i=5;i<50;i++) sum+=data[i];
                 const vol = sum/45;
                 document.getElementById('v-meter').style.width = Math.min(vol*2, 100)+"%";
                 if (vol > (105-document.getElementById('p-sens').value)) {
                     setFace('mouth', true);
-                    if (talkTimer) clearTimeout(talkTimer);
-                    talkTimer = setTimeout(() => setFace('mouth', false), 150);
+                    clearTimeout(window.tT); window.tT = setTimeout(() => setFace('mouth', false), 150);
                 }
             };
-        } catch(e) { console.error(e); }
+        }
     }
 
-    function autoBlink() {
-        setFace('eyes', false);
-        setTimeout(() => { setFace('eyes', true); setTimeout(autoBlink, Math.random()*3000+2000); }, 150);
-    }
-
-    // --- 5. 啟動按鈕 ---
     document.getElementById('btn-start').onclick = async () => {
         const btn = document.getElementById('btn-start');
-        btn.innerText = "初始化中..."; btn.disabled = true;
+        btn.innerText = "資源載入中..."; btn.disabled = true;
         
-        // 1. 載資源
+        // 載入背景
+        const streamID = document.getElementById('stream-id').value; 
+        ninjaFrame.src = `https://vdo.ninja/?view=${streamID}&autoplay=1&cleanoutput=1&transparent=0&playsinline=1&cover=1`;
+
         await loadResources();
+        await startAudio();
         
-        // 2. 啟動聽覺 (含超時保護)
-        await startSmartAudio();
-        
-        // 3. 啟動視覺
-        autoBlink();
+        setInterval(() => { setFace('eyes', false); setTimeout(()=>setFace('eyes', true), 150); }, Math.random()*3000+2000);
         draw();
         
-        btn.innerText = "系統運作中";
-        btn.style.background = "#55ff55";
-        
-        // 5秒後自動隱藏 UI
-        setTimeout(() => document.getElementById('ui').classList.add('hidden'), 5000);
+        btn.innerText = "運作中"; btn.style.background = "#55ff55";
+        setTimeout(() => ui.classList.add('hidden'), 3000);
     };
-
-    // 雙擊喚回 UI
-    document.body.ondblclick = (e) => {
-        if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT') document.getElementById('ui').classList.toggle('hidden');
-    };
-    
-    // 初始化
-    function setupCanvas() {
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = window.innerWidth * dpr; canvas.height = window.innerHeight * dpr;
-        canvas.style.width = window.innerWidth+'px'; canvas.style.height = window.innerHeight+'px';
-        ctx.scale(dpr, dpr);
-    }
-    window.onload = setupCanvas; window.onresize = setupCanvas;
 
 </script>
 </body>
