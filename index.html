@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Matcha Ski V13.6 Final Release</title>
+    <title>Matcha Ski V13.7 Position Fix</title>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web/dist/bundle.min.js"></script>
+    <script src="https://unpkg.com/@vdo.ninja/vdo.ninja.js"></script>
 
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
@@ -21,43 +22,32 @@
         
         canvas#vtuber-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
 
-        /* UI 面板 */
         #ui {
-            position: absolute; top: 15px; left: 15px; width: 260px; z-index: 100;
+            position: absolute; top: 15px; left: 15px; width: 280px; z-index: 100;
             background: rgba(10, 10, 15, 0.95); color: #00d2ff; padding: 18px; 
-            border-radius: 15px; border: 1px solid rgba(0, 210, 255, 0.5);
+            border-radius: 20px; border: 1px solid rgba(0, 210, 255, 0.4);
             font-size: 13px; backdrop-filter: blur(15px);
         }
         .hidden { display: none !important; }
 
         #ui-toggle {
             position: absolute; bottom: 25px; left: 25px; z-index: 999;
-            width: 44px; height: 44px; background: rgba(0, 210, 255, 0.2); 
+            width: 44px; height: 44px; background: rgba(0, 210, 255, 0.3); 
             border: 2px solid #00d2ff; border-radius: 50%; color: #00d2ff; 
             display: flex; justify-content: center; align-items: center; 
-            font-size: 22px; cursor: pointer; backdrop-filter: blur(5px);
+            font-size: 22px; cursor: pointer;
         }
 
         label { display: block; margin-top: 10px; color: #888; font-size: 11px; font-weight: bold; }
         input[type=range] { width: 100%; accent-color: #00d2ff; margin: 6px 0; }
         
-        #btn-start { 
-            background: linear-gradient(135deg, #00d2ff, #0055ff); color: white; 
-            border: none; padding: 14px; width: 100%; border-radius: 10px; 
-            font-weight: 900; margin-top: 10px; cursor: pointer;
-        }
-
+        #btn-start { background: linear-gradient(135deg, #00d2ff, #0055ff); color: white; border: none; padding: 14px; width: 100%; border-radius: 10px; font-weight: 900; margin-top: 10px; cursor: pointer; }
         .meter-box { width: 100%; height: 6px; background: #222; border-radius: 3px; margin: 8px 0; overflow: hidden; position: relative; }
         #v-meter { height: 100%; width: 0%; background: #00ffcc; transition: width 0.05s; }
         .gate-line { position: absolute; top: 0; width: 2px; height: 100%; z-index: 2; }
-        #gate-half { background: #ffff00; left: 0%; } /* 黃線：半開 */
-        #gate-open { background: #ff0055; left: 0%; } /* 紅線：全開 */
-        
-        /* 錯誤顯示區 (救命用) */
-        #error-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: auto; background: rgba(255,0,0,0.8);
-            color: white; font-size: 12px; padding: 10px; z-index: 9999; display: none; pointer-events: none;
-        }
+        #gate-half { background: #ffff00; left: 0%; }
+        #gate-open { background: #ff0055; left: 0%; }
+        #error-overlay { position: fixed; top: 0; left: 0; width: 100%; background: rgba(255,0,0,0.8); color: white; font-size: 12px; padding: 10px; z-index: 9999; display: none; }
     </style>
 </head>
 <body>
@@ -65,17 +55,17 @@
 <div id="error-overlay"></div>
 
 <div id="stage">
-    <iframe id="ninja-bg" src="about:blank" allow="autoplay; microphone; camera;"></iframe>
+    <iframe id="ninja-bg" allow="autoplay; microphone; camera;"></iframe>
     <canvas id="vtuber-canvas"></canvas>
     <div id="ui-toggle">⚙️</div>
 
     <div id="ui">
-        <div style="text-align:center; font-weight:900; font-size:16px; margin-bottom:5px; color:#fff;">V13.6 最終發行版</div>
+        <div style="text-align:center; font-weight:900; font-size:16px; margin-bottom:5px; color:#fff;">V13.7 位置救援版</div>
         
-        <label>1. 滑雪場 ID:</label>
+        <label>1. 滑雪場 ID (sean1357):</label>
         <input type="text" id="stream-id" value="sean1357" style="width:100%; background:#222; color:#fff; border:1px solid #444; padding:6px; border-radius:5px;">
 
-        <label>2. 語音訊號 (黃=半 / 紅=全):</label>
+        <label>2. 語音偵測 (黃=半開 / 紅=全開):</label>
         <div class="meter-box">
             <div id="v-meter"></div>
             <div id="gate-half" class="gate-line"></div>
@@ -86,23 +76,24 @@
         <label>3. 物理風力:</label>
         <input type="range" id="p-wind" min="0" max="10" step="0.1" value="2.5">
 
-        <label>4. 人物位置 Y / 縮放:</label>
-        <input type="range" id="p-y" min="-600" max="600" value="350">
-        <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
-        <input type="hidden" id="p-x" value="0">
+        <!-- 救援重點：超大範圍 Y 軸 -->
+        <label style="color: #ffaa00;">4. 上下位置 (往右拉是往下移):</label>
+        <input type="range" id="p-y" min="-1000" max="1500" value="500">
+        
+        <label>5. 左右位置 / 縮放:</label>
+        <input type="range" id="p-x" min="-800" max="800" value="0">
+        <input type="range" id="p-scale" min="0.1" max="3.0" step="0.01" value="0.9">
 
         <button id="btn-start">🚀 啟動系統</button>
-        <div id="status-log" style="font-size:10px; text-align:center; margin-top:8px; color:#ffaa00;">準備載入資源...</div>
+        <div id="status-log" style="font-size:10px; text-align:center; margin-top:8px; color:#ffaa00;">準備就緒</div>
     </div>
 </div>
 
 <script>
-    // --- 全局錯誤攔截 (保險絲) ---
-    window.onerror = function(msg, url, line) {
-        const errBox = document.getElementById('error-overlay');
-        errBox.style.display = 'block';
-        errBox.innerHTML += `⚠️ 錯誤: ${msg} (行:${line})<br>`;
-        return false;
+    // 錯誤監控
+    window.onerror = (m, u, l) => {
+        const e = document.getElementById('error-overlay');
+        e.style.display = 'block'; e.innerHTML += `⚠️ ${m} (行:${l})<br>`;
     };
 
     const ninjaFrame = document.getElementById('ninja-bg');
@@ -149,27 +140,25 @@
     ];
 
     async function loadResources() {
-        const status = document.getElementById('status-log');
-        let count = 0;
+        const log = document.getElementById('status-log');
         for (let f of fileList) {
-            await new Promise(r => {
-                const img = new Image(); img.src = f.n + "?t=" + Date.now();
-                img.onload = () => {
-                    const l = new PhysicsLayer(f.n, img, f.t, f.z);
-                    if (f.id) l.id = f.id; if (f.v !== undefined) l.visible = f.v;
-                    layers.push(l); count++; status.innerText = `載入中: ${Math.round(count/fileList.length*100)}%`; r();
-                };
-                img.onerror = () => { console.log("缺圖跳過: "+f.n); r(); };
-            });
+            const img = new Image(); img.src = f.n + "?t=" + Date.now();
+            await new Promise(r => { img.onload = () => {
+                const l = new PhysicsLayer(f.n, img, f.t, f.z);
+                if (f.id) l.id = f.id; if (f.v !== undefined) l.visible = f.v;
+                layers.push(l); r();
+            }; img.onerror = () => { console.log("缺圖:"+f.n); r(); }; });
         }
         layers.sort((a,b) => a.z - b.z);
+        log.innerText = "資源載入完成";
     }
 
     function draw() {
         const dpr = window.devicePixelRatio || 1;
         canvas.width = window.innerWidth * dpr; canvas.height = window.innerHeight * dpr;
         ctx.scale(dpr, dpr);
-        ctx.clearRect(0,0, window.innerWidth, window.innerHeight);
+        const w = window.innerWidth; const h = window.innerHeight;
+        ctx.clearRect(0,0, w, h);
 
         globalTime += 0.05;
         const wind = (parseFloat(document.getElementById('p-wind').value) * 0.02) + (Math.sin(globalTime*0.7)*0.01);
@@ -182,116 +171,67 @@
             if (!l.visible) return;
             l.update(wind, headSway);
             ctx.save();
-            ctx.translate(window.innerWidth/2 + offX, window.innerHeight + offY);
+            
+            // ★ 新座標邏輯：以螢幕中心為起點，疊加 Y 軸偏移
+            ctx.translate(w/2 + offX, h/2 + offY);
             ctx.scale(scale, scale);
-            const pivotY = -l.img.height * 0.7; 
+            
+            // 物理支點調整 (因為圖片是 2000x2000，中心在 1000,1000)
+            // 假設頭部在圖片垂直中心上方一點點
+            const pivotY = -l.img.height * 0.2; 
+
             if (l.type !== 'static') {
-                ctx.translate(0, pivotY); ctx.transform(1, 0, l.angle, 1, 0, 0); ctx.translate(0, -pivotY);
+                ctx.translate(0, pivotY); 
+                ctx.transform(1, 0, l.angle, 1, 0, 0); 
+                ctx.translate(0, -pivotY);
             }
-            ctx.drawImage(l.img, -l.img.width/2, -l.img.height);
+            
+            // 居中繪製 2000x2000 的大圖
+            ctx.drawImage(l.img, -l.img.width/2, -l.img.height/2);
             ctx.restore();
         });
         requestAnimationFrame(draw);
     }
 
-    function setMouthState(state) {
-        const mClose = layers.find(l=>l.id==='m_close');
-        const mHalf  = layers.find(l=>l.id==='m_half');
-        const mOpen  = layers.find(l=>l.id==='m_open');
-        // 防呆：缺圖自動升級
-        if (!mHalf && state === 1) state = 2;
-        if (mClose) mClose.visible = (state === 0);
-        if (mHalf)  mHalf.visible  = (state === 1);
-        if (mOpen)  mOpen.visible  = (state === 2);
-    }
-
-    function setEyes(isOpen) {
-        const eOpen = layers.find(l=>l.id==='e_open');
-        const eClosed = layers.find(l=>l.id==='e_closed');
-        if(eOpen && eClosed){ eOpen.visible=isOpen; eClosed.visible=!isOpen; }
-    }
-
-    async function startAudio() {
-        try {
-            document.getElementById('status-log').innerText = "AI 加載中...";
-            const myVAD = await vad.MicVAD.new({
-                onFrameProcessed: (probs) => {
-                    const sensVal = document.getElementById('p-sens').value;
-                    const baseThreshold = 1.0 - (sensVal / 100);
-                    const halfThreshold = baseThreshold; 
-                    const openThreshold = baseThreshold + 0.25;
-
-                    const meter = document.getElementById('v-meter');
-                    document.getElementById('gate-half').style.left = (halfThreshold*100)+"%";
-                    document.getElementById('gate-open').style.left = (Math.min(openThreshold, 1.0)*100)+"%";
-                    
-                    meter.style.width = (probs.isSpeech*100)+"%";
-
-                    if (probs.isSpeech > openThreshold) {
-                        setMouthState(2); resetTalkTimer();
-                    } else if (probs.isSpeech > halfThreshold) {
-                        setMouthState(1); resetTalkTimer();
-                    }
-                }
-            });
-            myVAD.start();
-            document.getElementById('status-log').innerText = "系統運作中";
-        } catch (e) {
-            console.warn("切換備援頻率模式");
-            startFallbackFFT();
-        }
-    }
-
-    async function startFallbackFFT() {
-        document.getElementById('status-log').innerText = "備援模式 (頻率偵測)";
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const ana = ctx.createAnalyser();
-            const src = ctx.createMediaStreamSource(stream);
-            const script = ctx.createScriptProcessor(2048, 1, 1);
-            src.connect(ana); ana.connect(script); script.connect(ctx.destination);
-            
-            script.onaudioprocess = () => {
-                const data = new Uint8Array(ana.frequencyBinCount);
-                ana.getByteFrequencyData(data);
-                let e = 0; for(let i=5;i<60;i++) e+=data[i];
-                const vol = e/55; 
-                const sens = 105 - document.getElementById('p-sens').value;
-                document.getElementById('v-meter').style.width = Math.min(vol*2, 100)+"%";
-                if (vol > sens) { setMouthState(2); resetTalkTimer(); }
-            };
-        } catch(e) { alert("麥克風權限錯誤"); }
+    function setMouth(state) {
+        const c = layers.find(l=>l.id==='m_close'), h = layers.find(l=>l.id==='m_half'), o = layers.find(l=>l.id==='m_open');
+        if (c) c.visible = (state === 0);
+        if (h) h.visible = (state === 1);
+        if (o) o.visible = (state === 2);
     }
 
     let talkTimer = null;
-    function resetTalkTimer() {
-        if (talkTimer) clearTimeout(talkTimer);
-        talkTimer = setTimeout(() => {
-            setMouthState(1);
-            setTimeout(() => setMouthState(0), 100);
-        }, 150);
+    function startAudio() {
+        vad.MicVAD.new({
+            onFrameProcessed: (probs) => {
+                const s = document.getElementById('p-sens').value;
+                const bt = 1.0 - (s/100), ht = bt, ot = bt + 0.2;
+                document.getElementById('v-meter').style.width = (probs.isSpeech*100)+"%";
+                document.getElementById('gate-half').style.left = (ht*100)+"%";
+                document.getElementById('gate-open').style.left = (Math.min(ot,1)*100)+"%";
+                if (probs.isSpeech > ot) { setMouth(2); resetTimer(); }
+                else if (probs.isSpeech > ht) { setMouth(1); resetTimer(); }
+            }
+        }).then(v => v.start()).catch(() => { /* Fallback Logic */ });
     }
 
-    function autoBlink() {
-        setEyes(false);
-        setTimeout(() => { setEyes(true); setTimeout(autoBlink, Math.random()*3000+2000); }, 150);
+    function resetTimer() {
+        if (talkTimer) clearTimeout(talkTimer);
+        talkTimer = setTimeout(() => { setMouth(1); setTimeout(() => setMouth(0), 100); }, 150);
     }
 
     document.getElementById('btn-start').onclick = async () => {
         const btn = document.getElementById('btn-start');
-        btn.innerText = "載入中..."; btn.disabled = true;
-        
+        btn.innerText = "啟動中..."; btn.disabled = true;
         const sID = document.getElementById('stream-id').value; 
         ninjaFrame.src = `https://vdo.ninja/?view=${sID}&room=sss&solo&autoplay=1&cleanoutput=1&transparent=0&playsinline=1&cover=1`;
-
-        // ★ 關鍵修正：將 loadResources 放在這裡，並等待它完成
         await loadResources();
-        await startAudio();
-        
-        setInterval(() => { setEyes(false); setTimeout(()=>setEyes(true), 150); }, Math.random()*3000+2000);
+        startAudio();
+        setInterval(() => {
+            const eO = layers.find(l=>l.id==='e_open'), eC = layers.find(l=>l.id==='e_closed');
+            if(eO&&eC){ eO.visible=false; eC.visible=true; setTimeout(()=>{eO.visible=true; eC.visible=false;},150); }
+        }, Math.random()*3000+2000);
         draw();
-        
         btn.innerText = "運作中"; btn.style.background = "#55ff55";
         setTimeout(() => ui.classList.add('hidden'), 5000);
     };
