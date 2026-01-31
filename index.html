@@ -3,459 +3,295 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Matcha Ski V13.1 Cloud Director</title>
+    <title>Matcha Ski V13.2 Fast Boot</title>
     
-    <!-- 1. 引入 AI 語音偵測庫 (VAD) -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web/dist/bundle.min.js"></script>
 
     <style>
-        /* 基礎歸零與全螢幕設定 */
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; background: #000; }
         
-        /* 容器：確保 V 皮跟背景對齊 */
-        #stage { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-
-        /* --- 層級 1: 背景串流 (來自日本的 VDO.Ninja) --- */
-        /* 使用 iframe 嵌入，保證畫面最穩定 */
+        /* 背景串流 iframe */
         iframe#ninja-bg {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            border: none; z-index: 0; pointer-events: none;
-            /* 稍微放大一點點以避免邊緣黑邊 */
-            transform: scale(1.02); 
+            border: none; z-index: 0; pointer-events: none; transform: scale(1.02);
         }
+        
+        /* 前景 Canvas */
+        canvas#vtuber-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
 
-        /* --- 層級 2: V 皮畫布 (物理引擎) --- */
-        canvas#vtuber-canvas { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            z-index: 10; pointer-events: none; /* 讓滑鼠點擊能穿透 */
-        }
-
-        /* --- 層級 3: 導播控制台 (UI) --- */
+        /* UI */
         #ui {
-            position: absolute; top: 15px; left: 15px; width: 280px; z-index: 100;
-            background: rgba(10, 10, 15, 0.9); color: #00d2ff; padding: 15px; 
-            border-radius: 16px; border: 1px solid rgba(0, 210, 255, 0.3);
-            backdrop-filter: blur(15px); box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-            font-size: 13px; transition: opacity 0.3s;
+            position: absolute; top: 15px; left: 15px; width: 260px; z-index: 100;
+            background: rgba(0, 0, 0, 0.9); color: #00d2ff; padding: 15px; 
+            border-radius: 15px; border: 1px solid #00d2ff; font-size: 13px;
         }
-
-        /* 標題與狀態 */
-        .title { font-weight: 900; font-size: 15px; color: #fff; margin-bottom: 5px; }
-        .status-dot { width: 8px; height: 8px; background: #ffaa00; border-radius: 50%; display: inline-block; margin-right: 5px; box-shadow: 0 0 5px #ffaa00;}
-        .status-active { background: #00ff00; box-shadow: 0 0 8px #00ff00; }
-
-        /* 音訊監控條 */
-        .meter-box { width: 100%; height: 6px; background: #222; border-radius: 3px; margin: 10px 0; overflow: hidden; position: relative; }
-        #v-meter { width: 0%; height: 100%; background: linear-gradient(90deg, #00d2ff, #00ff99); transition: width 0.05s; }
-        #v-gate { position: absolute; top: 0; left: 0%; width: 2px; height: 100%; background: #ff0055; z-index: 2; }
-
-        /* 拉桿控制 */
-        .ctrl-group { margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px; }
-        label { display: block; color: #aaa; font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between; }
-        input[type=range] { width: 100%; accent-color: #00d2ff; cursor: pointer; }
-        
-        /* 啟動按鈕 */
+        .hidden { display: none !important; }
+        label { display: block; margin-top: 8px; color: #888; font-size: 11px; }
+        input[type=range] { width: 100%; accent-color: #00d2ff; }
         #btn-start { 
-            background: linear-gradient(135deg, #00d2ff, #0055ff); color: white; 
-            border: none; padding: 12px; width: 100%; border-radius: 8px; 
-            font-weight: 900; cursor: pointer; margin-top: 10px;
+            background: #00d2ff; color: #000; border: none; padding: 12px; width: 100%; 
+            border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px;
         }
+        #status-log { color: #ffaa00; font-size: 10px; text-align: center; margin-top: 5px; min-height: 15px; }
         
-        .hidden { opacity: 0; pointer-events: none; }
+        .meter-box { width: 100%; height: 5px; background: #333; margin-top: 5px; }
+        #v-meter { height: 100%; width: 0%; background: #00ff00; transition: width 0.05s; }
     </style>
 </head>
 <body>
 
-<div id="stage">
-    <!-- 背景：自動連線你的 VDO.Ninja 房間 (cleanoutput=1 代表隱藏 Ninja 的 UI) -->
-    <iframe id="ninja-bg" src="" allow="autoplay; microphone; camera; display-capture"></iframe>
+<!-- 背景 Ninja -->
+<iframe id="ninja-bg" allow="autoplay; microphone; camera; display-capture"></iframe>
+<canvas id="vtuber-canvas"></canvas>
+
+<div id="ui">
+    <div style="text-align:center; font-weight:900;">V13.2 急速啟動版</div>
     
-    <!-- 前景：物理 V 皮 -->
-    <canvas id="vtuber-canvas"></canvas>
+    <label>1. 滑雪場 ID:</label>
+    <input type="text" id="stream-id" value="sean1357" style="width:100%; background:#222; color:#fff; border:1px solid #444; padding:5px;">
+
+    <label>2. 聲音反應:</label>
+    <div class="meter-box"><div id="v-meter"></div></div>
+    <input type="range" id="p-sens" min="0" max="100" value="70">
     
-    <!-- 控制介面 -->
-    <div id="ui">
-        <div class="title">
-            <span id="sys-dot" class="status-dot"></span> V13.1 雲端導播台
-        </div>
-        <div style="font-size:10px; color:#888; margin-bottom:10px;">ID: sean1357 (自動連線中)</div>
+    <label>3. 物理風力:</label>
+    <input type="range" id="p-wind" min="0" max="10" step="0.1" value="3.0">
 
-        <div class="ctrl-group">
-            <label>AI 語音閘門 (Voice Gate):</label>
-            <div class="meter-box">
-                <div id="v-meter"></div>
-                <div id="v-gate" style="left: 70%;"></div>
-            </div>
-            <label>靈敏度 (Sensitivity):</label>
-            <input type="range" id="p-sens" min="0" max="100" value="75">
-        </div>
-
-        <div class="ctrl-group">
-            <label>物理風力 (Wind Physics):</label>
-            <input type="range" id="p-wind" min="0" max="10" step="0.1" value="3.0">
-        </div>
-
-        <div class="ctrl-group">
-            <label>位置調整 (X / Y):</label>
-            <div style="display:flex; gap:5px;">
-                <input type="range" id="p-x" min="-400" max="400" value="200">
-                <input type="range" id="p-y" min="-300" max="300" value="100">
-            </div>
-            <label>大小 (Scale):</label>
-            <input type="range" id="p-scale" min="0.2" max="2.0" step="0.05" value="0.85">
-        </div>
-
-        <button id="btn-start">啟動 V 皮系統</button>
-        <button onclick="document.getElementById('ui').classList.add('hidden')" style="background:transparent; border:1px solid #444; color:#888; padding:8px; width:100%; border-radius:6px; margin-top:5px; font-size:11px;">隱藏介面</button>
+    <label>4. 位置/縮放:</label>
+    <div style="display:flex; gap:5px;">
+        <input type="range" id="p-x" min="-400" max="400" value="0">
+        <input type="range" id="p-y" min="-400" max="400" value="100">
     </div>
+    <input type="range" id="p-scale" min="0.2" max="2.0" step="0.01" value="0.85">
+
+    <button id="btn-start">啟動系統</button>
+    <div id="status-log">等待指令...</div>
+    
+    <button onclick="document.getElementById('ui').classList.add('hidden')" style="width:100%; background:transparent; border:1px solid #555; color:#888; padding:5px; margin-top:10px; font-size:10px;">隱藏介面</button>
 </div>
 
 <script>
-    // --- 1. 自動背景載入邏輯 ---
-    // 這裡會自動把你的 VDO.Ninja 畫面載入到底層
+    // --- 1. 自動背景載入 ---
     const ninjaFrame = document.getElementById('ninja-bg');
-    // 參數說明：
-    // view=sean1357 : 觀看你的 ID
-    // autoplay=1 : 自動播放
-    // cleanoutput=1 : 隱藏 Ninja 的所有按鈕和 UI，只留畫面
-    // transparent=0 : 確保背景不透明 (雪景)
-    const streamID = 'sean1357'; 
+    const streamID = document.getElementById('stream-id').value; 
+    // 這裡我們預設載入 sean1357，並加上 &novideo=0 確保有影像
     ninjaFrame.src = `https://vdo.ninja/?view=${streamID}&autoplay=1&cleanoutput=1&transparent=0`;
 
-    // 檢查網址參數，如果是 OBS 模式 (?obs=1) 則自動隱藏 UI
+    // 參數偵測
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('obs')) {
-        document.getElementById('ui').style.display = 'none';
-    }
+    if (urlParams.has('obs')) document.getElementById('ui').style.display = 'none';
 
-    // --- [模組 1 結束，請等待模組 2] ---
-    // --- [模組 2 開始] 物理引擎與資源 ---
-
-    // 1. 物理物件類別 (處理彈簧擺動與視差)
+    // --- 2. 物理與資源 ---
     class PhysicsLayer {
         constructor(name, img, type, z) {
-            this.name = name;
-            this.img = img;
-            this.type = type; // static(靜態), head(頭), face(五官), hair(頭髮)
-            this.z = z;
-            
-            // 物理狀態
-            this.angle = 0;       // 目前角度
-            this.velocity = 0;    // 擺動速度
-            this.visible = true;
-            this.id = name.split('.')[0];
-
-            // 預設物理材質 (Mass質量, Stiffness硬度, Damping阻尼)
-            this.mass = 1.0; 
-            this.stiffness = 0.08; 
-            this.damping = 0.92;
-            this.windFactor = 1.0;   // 受風程度
-            this.parallax = 0;       // 3D 深度視差權重
-
-            // 根據檔名自動賦予物理屬性 (模擬真髮質感)
-            if (name.includes('_L')) { 
-                // 輕髮 (Light): 飄得快，阻尼低
-                this.mass = 0.6; this.stiffness = 0.15; this.damping = 0.94; 
-                this.windFactor = 1.5; this.parallax = 1.2;
-            } 
-            else if (name.includes('_H')) { 
-                // 重髮 (Heavy): 慣性大，飄得慢
-                this.mass = 3.0; this.stiffness = 0.04; this.damping = 0.85; 
-                this.windFactor = 0.6; this.parallax = 0.5;
-            } 
-            else if (name.includes('front')) { 
-                // 瀏海: 最靈動，視差最大 (離鏡頭最近)
-                this.mass = 0.8; this.stiffness = 0.12; this.damping = 0.90; 
-                this.windFactor = 1.3; this.parallax = 1.5;
-            }
+            this.name = name; this.img = img; this.type = type; this.z = z;
+            this.angle = 0; this.vel = 0; this.visible = true; this.id = name.split('.')[0];
+            this.mass = 1.0; this.stiffness = 0.1; this.damping = 0.9;
+            if (name.includes('_L')) { this.mass = 0.6; this.stiffness = 0.15; }
+            if (name.includes('_H')) { this.mass = 2.5; this.stiffness = 0.05; }
+            if (name.includes('front')) { this.mass = 0.8; this.stiffness = 0.12; }
         }
-
-        // 物理更新函數 (每秒 60 次)
-        update(windForce, headMovement) {
-            // 靜態層 (後領、身體) 不動
+        update(wind, headSway) {
             if (this.type === 'static') return;
-
-            // 五官與頭部：直接鎖定，不進行物理擺盪 (防止臉部五官移位)
-            if (this.type === 'head' || this.type === 'face') {
-                this.angle = headMovement;
-                return;
-            }
-
-            // 頭髮物理運算：
-            // 目標角度 = 風力(受質量影響) + 頭部慣性
-            let targetAngle = (windForce * (2.5 - this.mass * 0.4)) + (headMovement * this.mass * 0.8);
-
-            // 強制限位器 (Clamp)：防止風太大頭髮折斷 (限制在 ±20度內)
-            const limit = 0.35; 
-            if (targetAngle > limit) targetAngle = limit + (targetAngle - limit) * 0.1;
-            if (targetAngle < -limit) targetAngle = -limit + (targetAngle + limit) * 0.1;
-
-            // 彈簧公式求解
-            const force = (targetAngle - this.angle) * this.stiffness;
-            const acceleration = force / this.mass;
-            this.velocity = (this.velocity + acceleration) * this.damping;
-            this.angle += this.velocity;
+            if (this.type === 'head' || this.type === 'face') { this.angle = headSway; return; }
+            let target = (wind * (2 - this.mass*0.3)) + (headSway * this.mass * 0.5);
+            let force = (target - this.angle) * this.stiffness;
+            let acc = force / this.mass;
+            this.vel = (this.vel + acc) * this.damping;
+            this.angle += this.vel;
         }
     }
 
-    // 系統變數
     const canvas = document.getElementById('vtuber-canvas');
     const ctx = canvas.getContext('2d');
     const layers = [];
     let globalTime = 0;
 
-    // 2. 16 層圖層清單 (三明治結構)
-    // 請確保這裡的檔名與 GitHub 上的一模一樣
     const fileList = [
-        // --- 底層 ---
-        {n:'jacket_back.png', t:'static', z:10}, // 後領
-        {n:'head.png',        t:'head',   z:15}, // 頭/脖子 (插在領子中間)
-        
-        // --- 中層 (遮蓋層) ---
-        {n:'body.png',        t:'static', z:20}, // 身體/前領 (蓋住脖子)
-
-        // --- 五官層 (跟隨頭部) ---
+        {n:'jacket_back.png', t:'static', z:10},
+        {n:'head.png',        t:'head',   z:15},
+        {n:'body.png',        t:'static', z:20},
         {n:'ears.png',        t:'head',   z:25},
         {n:'mouth_close.png', t:'face',   z:26, id:'m_close'},
         {n:'mouth_open.png',  t:'face',   z:26, id:'m_open', v:false},
         {n:'eyes_open.png',   t:'face',   z:27, id:'e_open'},
         {n:'eyes_closed.png', t:'face',   z:27, id:'e_closed', v:false},
-
-        // --- 頭髮物理層 (最上層) ---
         {n:'hair_base.png',   t:'hair',   z:30},
-        {n:'hair_H1.png',     t:'hair',   z:31},
-        {n:'hair_H2.png',     t:'hair',   z:31},
-        {n:'hair_M1.png',     t:'hair',   z:32},
-        {n:'hair_M2.png',     t:'hair',   z:32},
+        {n:'hair_H1.png',     t:'hair',   z:31}, {n:'hair_H2.png', t:'hair', z:31},
+        {n:'hair_M1.png',     t:'hair',   z:32}, {n:'hair_M2.png', t:'hair', z:32},
         {n:'hair_L1.png',     t:'hair',   z:33},
-        {n:'layer-front1.png',t:'hair',   z:40},
-        {n:'layer-front2.png',t:'hair',   z:40}
+        {n:'layer-front1.png',t:'hair',   z:40}, {n:'layer-front2.png',t:'hair',   z:40}
     ];
 
-    // 3. 資源載入器
     async function loadResources() {
-        const status = document.getElementById('status');
         let count = 0;
-        
+        document.getElementById('status-log').innerText = "下載 V 皮圖層中...";
         for (let f of fileList) {
-            await new Promise(resolve => {
-                const img = new Image(); 
-                // 加上時間戳防止快取，確保讀到最新圖
-                img.src = f.n + "?t=" + new Date().getTime();
-                
+            await new Promise(r => {
+                const img = new Image(); img.src = f.n + "?t=" + Date.now();
                 img.onload = () => {
                     const l = new PhysicsLayer(f.n, img, f.t, f.z);
-                    if (f.id) l.id = f.id;
-                    if (f.v !== undefined) l.visible = f.v;
-                    layers.push(l);
-                    count++;
-                    status.innerText = `載入資源: ${Math.round(count/fileList.length*100)}%`;
-                    resolve();
+                    if (f.id) l.id = f.id; if (f.v !== undefined) l.visible = f.v;
+                    layers.push(l); count++; r();
                 };
-                img.onerror = () => {
-                    console.warn("缺圖跳過: " + f.n);
-                    resolve(); // 缺圖不報錯，繼續執行
-                };
+                img.onerror = () => { console.log("缺圖跳過: "+f.n); r(); };
             });
         }
-        // 依照 Z 軸排序，確保前後順序正確
-        layers.sort((a, b) => a.z - b.z);
-        status.innerText = "資源就緒，等待啟動...";
-    }
-    // --- [模組 3 開始] AI 大腦與最終渲染 ---
-
-    let talkTimer = null;
-    let audioContext = null;
-
-    // 1. 表情控制函數
-    function toggleFace(part, isOpen) {
-        const oId = part === 'mouth' ? 'm_open' : 'e_open';
-        const cId = part === 'mouth' ? 'm_close' : 'e_closed';
-        const op = layers.find(l => l.id === oId);
-        const cl = layers.find(l => l.id === cId);
-        if (op && cl) { op.visible = isOpen; cl.visible = !isOpen; }
+        layers.sort((a,b) => a.z - b.z);
     }
 
-    // 2. AI 語音偵測啟動 (Silero VAD)
-    async function startVAD() {
-        const status = document.getElementById('status');
-        const vMeter = document.getElementById('v-meter');
-        const vGate = document.getElementById('v-gate');
-        
-        try {
-            status.innerText = "正在連接 AI 模型...";
-            
-            // 獲取音訊流 (OBS 電腦端)
-            // 注意：這裡會抓取電腦的預設輸入裝置
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // 啟動 VAD
-            const myVAD = await vad.MicVAD.new({
-                stream: stream,
-                onFrameProcessed: (probs) => {
-                    // 更新 UI 音量條
-                    vMeter.style.width = (probs.isSpeech * 100) + "%";
-                    
-                    // 取得靈敏度 (UI拉桿)
-                    const sensVal = parseInt(document.getElementById('p-sens').value);
-                    const threshold = 1.0 - (sensVal / 100); 
-                    
-                    // 更新紅色門檻線的位置
-                    vGate.style.left = (threshold * 100) + "%";
-
-                    // AI 判定說話
-                    if (probs.isSpeech > threshold) {
-                        toggleFace('mouth', true);
-                        if (talkTimer) clearTimeout(talkTimer);
-                        // 150ms 延遲閉嘴 (肉感)
-                        talkTimer = setTimeout(() => toggleFace('mouth', false), 150);
-                    }
-                }
-            });
-            
-            myVAD.start();
-            document.getElementById('sys-dot').className = "status-dot status-active";
-            document.getElementById('sys-text').innerText = "系統上線 (監視中)";
-            status.innerText = "AI 運作中 | 物理引擎啟動";
-            
-        } catch (e) {
-            console.warn("AI 啟動受阻，切換至頻率備援模式...", e);
-            startFallbackMode(); // 如果 AI 失敗，切換頻率模式
-        }
-    }
-
-    // 備援模式 (如果 VAD 下載失敗用這個)
-    async function startFallbackMode() {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new AudioContext();
-        const analyser = audioContext.createAnalyser();
-        const src = audioContext.createMediaStreamSource(stream);
-        const script = audioContext.createScriptProcessor(2048, 1, 1);
-        src.connect(analyser); analyser.connect(script); script.connect(audioContext.destination);
-        
-        script.onaudioprocess = () => {
-            const data = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(data);
-            // 簡單計算音量
-            let sum = 0; for(let i=0; i<data.length; i++) sum += data[i];
-            const vol = sum / data.length;
-            const threshold = 105 - parseInt(document.getElementById('p-sens').value);
-            
-            if (vol > threshold) {
-                toggleFace('mouth', true);
-                clearTimeout(talkTimer);
-                talkTimer = setTimeout(() => toggleFace('mouth', false), 150);
-            }
-        };
-        document.getElementById('sys-dot').className = "status-dot dot-warn";
-        document.getElementById('sys-text').innerText = "備援模式";
-    }
-
-    // 3. 渲染迴圈 (Physics Loop)
+    // --- 3. 繪圖迴圈 ---
     function draw() {
-        // 設定高畫質
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = window.innerWidth * dpr;
-        canvas.height = window.innerHeight * dpr;
+        canvas.width = window.innerWidth * dpr; canvas.height = window.innerHeight * dpr;
         ctx.scale(dpr, dpr);
-        const w = window.innerWidth;
-        const h = window.innerHeight;
+        ctx.clearRect(0,0, window.innerWidth, window.innerHeight);
 
-        // ★ 關鍵：每次清空畫布，讓底層 VDO.Ninja 雪景透出來
-        ctx.clearRect(0, 0, w, h);
-
-        // 更新全域物理量
         globalTime += 0.05;
-        const windVal = parseFloat(document.getElementById('p-wind').value);
-        // 自然風場 = 基礎風 + 隨機亂流
-        const wind = (windVal * 0.02) + (Math.sin(globalTime * 0.7) * 0.01) + (Math.sin(globalTime * 2.3) * 0.005);
-        // 頭部呼吸 = 緩慢擺動
+        const wind = (parseFloat(document.getElementById('p-wind').value) * 0.02) + (Math.sin(globalTime*0.7)*0.01);
         const headSway = Math.sin(globalTime * 0.5) * 0.03;
-
-        // UI 參數
         const scale = parseFloat(document.getElementById('p-scale').value);
         const offX = parseFloat(document.getElementById('p-x').value);
         const offY = parseFloat(document.getElementById('p-y').value);
 
-        // 繪製每一層
         layers.forEach(l => {
             if (!l.visible) return;
             l.update(wind, headSway);
-
             ctx.save();
-            
-            // 1. 定位：移動到設定的位置 (預設右下角)
-            // 將原點移到視窗中心 + 偏移量
-            ctx.translate(w / 2 + offX, h + offY);
-            
-            // 2. 視差：根據圖層深度與頭部擺動，產生偽 3D 位移
-            // parallax 係數越高 (前層)，移動越多
-            const parallaxX = headSway * 30 * l.parallax; 
-            ctx.translate(parallaxX, 0);
-
-            // 3. 縮放
+            ctx.translate(window.innerWidth/2 + offX, window.innerHeight + offY);
             ctx.scale(scale, scale);
-
-            // 4. 錨點旋轉 (Anchor Pivot Fix)
-            // 針對 2000px 大圖，將旋轉點定在頭部 (圖片高度的 70% 處)
-            // 這樣旋轉時，頭頂不動，髮尾動
-            const pivotY = -l.img.height * 0.7;
-            
+            const pivotY = -l.img.height * 0.7; 
             if (l.type !== 'static') {
-                ctx.translate(0, pivotY); 
-                // 使用 Skew (斜切) 代替 Rotate，防止頭髮飛起來
-                // ctx.transform(水平縮放, 垂直傾斜, 水平傾斜, 垂直縮放, 水平位移, 垂直位移)
-                ctx.transform(1, 0, l.angle, 1, 0, 0); 
-                ctx.translate(0, -pivotY);
+                ctx.translate(0, pivotY); ctx.transform(1, 0, l.angle, 1, 0, 0); ctx.translate(0, -pivotY);
             }
-
-            // 5. 繪製圖片 (以底部中心為基準)
-            ctx.drawImage(l.img, -l.img.width / 2, -l.img.height);
-            
+            ctx.drawImage(l.img, -l.img.width/2, -l.img.height);
             ctx.restore();
         });
-
         requestAnimationFrame(draw);
     }
 
-    // 自動眨眼
-    function autoBlink() {
-        toggleFace('eyes', false);
-        setTimeout(() => {
-            toggleFace('eyes', true);
-            setTimeout(autoBlink, Math.random() * 3000 + 2000);
-        }, 150);
+    // --- 4. 聽覺 (AI + 備援) ---
+    let talkTimer = null;
+    function setFace(part, isOpen) {
+        const oId = part==='mouth'?'m_open':'e_open'; const cId = part==='mouth'?'m_close':'e_closed';
+        const op = layers.find(l=>l.id===oId); const cl = layers.find(l=>l.id===cId);
+        if(op&&cl){ op.visible=isOpen; cl.visible=!isOpen; }
     }
 
-    // 4. 系統入口
+    // ★ 關鍵：帶有超時機制的 AI 啟動器 ★
+    async function startSmartAudio() {
+        const status = document.getElementById('status-log');
+        
+        // 1. 先嘗試啟動備援 (AudioContext)，確保至少有聲音輸入
+        let audioCtx;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            // 這裡不綁定分析器，只為了喚醒權限
+        } catch(e) {
+            alert("請允許麥克風權限！");
+            return;
+        }
+
+        // 2. 嘗試並行下載 AI，設定 8 秒超時
+        status.innerText = "嘗試載入 AI 模型 (限時 8 秒)...";
+        
+        const aiPromise = vad.MicVAD.new({
+            onFrameProcessed: (probs) => {
+                // AI 成功運作中
+                const sens = 1.0 - (document.getElementById('p-sens').value/100);
+                document.getElementById('v-meter').style.width = (probs.isSpeech*100)+"%";
+                if (probs.isSpeech > sens) {
+                    setFace('mouth', true);
+                    if (talkTimer) clearTimeout(talkTimer);
+                    talkTimer = setTimeout(() => setFace('mouth', false), 150);
+                }
+            }
+        });
+
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("TIMEOUT")), 8000)
+        );
+
+        try {
+            const myVAD = await Promise.race([aiPromise, timeoutPromise]);
+            myVAD.start();
+            status.innerText = "AI 模式運作中 (最佳)";
+            status.style.color = "#00ff00";
+        } catch (err) {
+            console.warn("AI 啟動超時或失敗，切換備援:", err);
+            status.innerText = "備援模式 (頻率偵測)";
+            startFallbackMode(audioCtx); // 啟動備援
+        }
+    }
+
+    // 備援頻率模式
+    async function startFallbackMode(existingCtx) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const ctx = existingCtx || new AudioContext();
+            const ana = ctx.createAnalyser();
+            const src = ctx.createMediaStreamSource(stream);
+            const script = ctx.createScriptProcessor(2048, 1, 1);
+            src.connect(ana); ana.connect(script); script.connect(ctx.destination);
+            
+            script.onaudioprocess = () => {
+                const data = new Uint8Array(ana.frequencyBinCount);
+                ana.getByteFrequencyData(data);
+                let sum = 0; for(let i=5;i<50;i++) sum+=data[i];
+                const vol = sum/45;
+                document.getElementById('v-meter').style.width = Math.min(vol*2, 100)+"%";
+                if (vol > (105-document.getElementById('p-sens').value)) {
+                    setFace('mouth', true);
+                    if (talkTimer) clearTimeout(talkTimer);
+                    talkTimer = setTimeout(() => setFace('mouth', false), 150);
+                }
+            };
+        } catch(e) { console.error(e); }
+    }
+
+    function autoBlink() {
+        setFace('eyes', false);
+        setTimeout(() => { setFace('eyes', true); setTimeout(autoBlink, Math.random()*3000+2000); }, 150);
+    }
+
+    // --- 5. 啟動按鈕 ---
     document.getElementById('btn-start').onclick = async () => {
         const btn = document.getElementById('btn-start');
-        btn.innerText = "啟動中..."; btn.disabled = true;
+        btn.innerText = "初始化中..."; btn.disabled = true;
         
-        await loadResources(); // 載入圖片
-        await startVAD();      // 啟動 AI
+        // 1. 載資源
+        await loadResources();
         
-        autoBlink(); // 啟動眨眼
-        draw();      // 開始繪圖
+        // 2. 啟動聽覺 (含超時保護)
+        await startSmartAudio();
         
-        btn.innerText = "系統運作中"; 
+        // 3. 啟動視覺
+        autoBlink();
+        draw();
+        
+        btn.innerText = "系統運作中";
         btn.style.background = "#55ff55";
         
-        // 如果網址有 ?obs=1，自動隱藏 UI
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('obs')) {
-            document.getElementById('ui').style.display = 'none';
-        }
+        // 5秒後自動隱藏 UI
+        setTimeout(() => document.getElementById('ui').classList.add('hidden'), 5000);
     };
 
-    // 雙擊隱藏/顯示 UI
+    // 雙擊喚回 UI
     document.body.ondblclick = (e) => {
-        if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') {
-            document.getElementById('ui').classList.toggle('hidden');
-        }
+        if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT') document.getElementById('ui').classList.toggle('hidden');
     };
+    
+    // 初始化
+    function setupCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * dpr; canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth+'px'; canvas.style.height = window.innerHeight+'px';
+        ctx.scale(dpr, dpr);
+    }
+    window.onload = setupCanvas; window.onresize = setupCanvas;
 
 </script>
 </body>
